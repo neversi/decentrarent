@@ -42,6 +42,16 @@ func (h *Handler) enrich(p *Property) PropertyResponse {
 	return PropertyResponse{Property: *p, Media: media}
 }
 
+// Create godoc
+// @Summary Create a property listing
+// @Description Creates a new property listing for the authenticated user
+// @Tags properties
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param body body CreatePropertyRequest true "Property details"
+// @Success 201 {object} PropertyResponse
+// @Router /properties [post]
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	wallet := mw.GetWalletAddress(r.Context())
 	if wallet == "" {
@@ -75,6 +85,19 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(h.enrich(p))
 }
 
+// List godoc
+// @Summary List properties
+// @Description Returns a filtered list of properties with media
+// @Tags properties
+// @Produce json
+// @Param status query string false "Filter by status (listed, unlisted, rented)"
+// @Param owner query string false "Filter by owner wallet"
+// @Param token_mint query string false "Filter by token mint (SOL, USDC, USDT)"
+// @Param period_type query string false "Filter by period type (hour, day, month)"
+// @Param limit query int false "Limit results (default 20, max 100)"
+// @Param offset query int false "Offset for pagination"
+// @Success 200 {array} PropertyResponse
+// @Router /properties [get]
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	limit := 20
@@ -123,6 +146,15 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(result)
 }
 
+// Get godoc
+// @Summary Get property by ID
+// @Description Returns a single property with media
+// @Tags properties
+// @Produce json
+// @Param id path string true "Property ID"
+// @Success 200 {object} PropertyResponse
+// @Failure 404 {object} map[string]string
+// @Router /properties/{id} [get]
 func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	p, err := h.store.GetByID(id)
@@ -135,6 +167,18 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(h.enrich(p))
 }
 
+// Update godoc
+// @Summary Update a property
+// @Description Updates property fields (owner only)
+// @Tags properties
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param id path string true "Property ID"
+// @Param body body UpdatePropertyRequest true "Fields to update"
+// @Success 200 {object} PropertyResponse
+// @Failure 403 {object} map[string]string
+// @Router /properties/{id} [put]
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	wallet := mw.GetWalletAddress(r.Context())
 	id := chi.URLParam(r, "id")
@@ -165,6 +209,17 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(h.enrich(updated))
 }
 
+// UpdateStatus godoc
+// @Summary Change property status
+// @Description Updates property status to listed or unlisted (owner only)
+// @Tags properties
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param id path string true "Property ID"
+// @Param body body StatusRequest true "New status"
+// @Success 200 {object} PropertyResponse
+// @Router /properties/{id}/status [patch]
 func (h *Handler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 	wallet := mw.GetWalletAddress(r.Context())
 	id := chi.URLParam(r, "id")
@@ -200,6 +255,15 @@ func (h *Handler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(h.enrich(updated))
 }
 
+// Delete godoc
+// @Summary Delete a property
+// @Description Deletes a property and all its media (owner only)
+// @Tags properties
+// @Security BearerAuth
+// @Param id path string true "Property ID"
+// @Success 204
+// @Failure 403 {object} map[string]string
+// @Router /properties/{id} [delete]
 func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	wallet := mw.GetWalletAddress(r.Context())
 	id := chi.URLParam(r, "id")

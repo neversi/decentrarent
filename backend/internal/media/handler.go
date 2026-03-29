@@ -30,6 +30,17 @@ func (h *Handler) checkOwner(r *http.Request) (*property.Property, string, error
 	return p, wallet, nil
 }
 
+// GetUploadURL godoc
+// @Summary Get presigned upload URL
+// @Description Returns a presigned MinIO URL for direct file upload (owner only)
+// @Tags media
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param id path string true "Property ID"
+// @Param body body UploadURLRequest true "File name"
+// @Success 200 {object} UploadURLResponse
+// @Router /properties/{id}/media/upload-url [post]
 func (h *Handler) GetUploadURL(w http.ResponseWriter, r *http.Request) {
 	p, wallet, err := h.checkOwner(r)
 	if err != nil {
@@ -60,6 +71,17 @@ func (h *Handler) GetUploadURL(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// Register godoc
+// @Summary Register uploaded media
+// @Description Registers a media file after it has been uploaded to MinIO (owner only)
+// @Tags media
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param id path string true "Property ID"
+// @Param body body RegisterMediaRequest true "File key from upload"
+// @Success 201 {object} PropertyMedia
+// @Router /properties/{id}/media [post]
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	p, wallet, err := h.checkOwner(r)
 	if err != nil {
@@ -88,6 +110,15 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(m)
 }
 
+// Delete godoc
+// @Summary Delete media
+// @Description Deletes a media item and its S3 object (owner only)
+// @Tags media
+// @Security BearerAuth
+// @Param id path string true "Property ID"
+// @Param mediaId path string true "Media ID"
+// @Success 204
+// @Router /properties/{id}/media/{mediaId} [delete]
 func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	p, wallet, err := h.checkOwner(r)
 	if err != nil {
@@ -111,6 +142,16 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// Reorder godoc
+// @Summary Reorder media
+// @Description Updates the sort order of media items (owner only)
+// @Tags media
+// @Security BearerAuth
+// @Accept json
+// @Param id path string true "Property ID"
+// @Param body body ReorderRequest true "Ordered list of media IDs"
+// @Success 204
+// @Router /properties/{id}/media/order [put]
 func (h *Handler) Reorder(w http.ResponseWriter, r *http.Request) {
 	p, wallet, err := h.checkOwner(r)
 	if err != nil {

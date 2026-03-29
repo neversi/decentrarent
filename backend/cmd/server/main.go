@@ -9,7 +9,9 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	_ "github.com/lib/pq"
+	httpSwagger "github.com/swaggo/http-swagger/v2"
 
+	_ "github.com/abdro/decentrarent/backend/docs"
 	"github.com/abdro/decentrarent/backend/internal/auth"
 	"github.com/abdro/decentrarent/backend/internal/chat"
 	"github.com/abdro/decentrarent/backend/internal/config"
@@ -19,6 +21,15 @@ import (
 	"github.com/abdro/decentrarent/backend/internal/user"
 )
 
+// @title DecentraRent API
+// @version 1.0
+// @description API for DecentraRent - Solana dApp for asset renting
+// @host localhost:8080
+// @BasePath /
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Enter "Bearer {token}"
 func main() {
 	cfg := config.Load()
 
@@ -91,6 +102,10 @@ func main() {
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok"))
 	})
+
+	r.Get("/swagger/*", httpSwagger.Handler(
+		httpSwagger.URL("http://localhost:8080/swagger/doc.json"),
+	))
 
 	// Auth routes (public)
 	r.Get("/auth/nonce", authHandler.GetNonce)

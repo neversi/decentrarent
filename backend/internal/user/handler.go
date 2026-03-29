@@ -15,6 +15,14 @@ func NewHandler(store *Store) *Handler {
 	return &Handler{store: store}
 }
 
+// GetMe godoc
+// @Summary Get current user
+// @Description Returns the authenticated user's profile
+// @Tags user
+// @Security BearerAuth
+// @Produce json
+// @Success 200 {object} User
+// @Router /user/me [get]
 func (h *Handler) GetMe(w http.ResponseWriter, r *http.Request) {
 	userID := mw.GetUserID(r.Context())
 	if userID == "" {

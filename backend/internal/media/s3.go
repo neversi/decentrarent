@@ -13,12 +13,13 @@ import (
 )
 
 type S3Client struct {
-	client       *minio.Client
-	publicClient *minio.Client
+	client       *minio.Client // internal: bucket ops, delete, etc.
+	signClient   *minio.Client // public endpoint: presigned URL generation
 	bucket       string
 }
 
 func NewS3Client(endpoint, publicEndpoint, accessKey, secretKey, bucket string, useSSL bool) (*S3Client, error) {
+	// Internal client for operations (reachable inside Docker)
 	client, err := minio.New(endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
 		Secure: useSSL,
@@ -27,14 +28,18 @@ func NewS3Client(endpoint, publicEndpoint, accessKey, secretKey, bucket string, 
 		return nil, err
 	}
 
-	publicClient, err := minio.New(publicEndpoint, &minio.Options{
+	// Signing client for presigned URLs (uses public-facing hostname so signatures match)
+	// Set region explicitly to avoid a network call to resolve it
+	signClient, err := minio.New(publicEndpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
 		Secure: useSSL,
+		Region: "us-east-1",
 	})
 	if err != nil {
 		return nil, err
 	}
 
+	// Auto-create bucket using internal client
 	ctx := context.Background()
 	exists, err := client.BucketExists(ctx, bucket)
 	if err != nil {
@@ -46,14 +51,15 @@ func NewS3Client(endpoint, publicEndpoint, accessKey, secretKey, bucket string, 
 		}
 	}
 
-	return &S3Client{client: client, publicClient: publicClient, bucket: bucket}, nil
+	return &S3Client{client: client, signClient: signClient, bucket: bucket}, nil
 }
 
 func (s *S3Client) GenerateUploadURL(propertyID, fileName string) (uploadURL, fileKey string, err error) {
 	ext := filepath.Ext(fileName)
 	fileKey = fmt.Sprintf("properties/%s/%s%s", propertyID, uuid.New().String(), ext)
 
-	presignedURL, err := s.publicClient.PresignedPutObject(context.Background(), s.bucket, fileKey, 15*time.Minute)
+	// Use signClient so the signature is computed for the public host
+	presignedURL, err := s.signClient.PresignedPutObject(context.Background(), s.bucket, fileKey, 15*time.Minute)
 	if err != nil {
 		return "", "", err
 	}
@@ -63,7 +69,8 @@ func (s *S3Client) GenerateUploadURL(propertyID, fileName string) (uploadURL, fi
 
 func (s *S3Client) GenerateDownloadURL(fileKey string) (string, error) {
 	reqParams := make(url.Values)
-	presignedURL, err := s.publicClient.PresignedGetObject(context.Background(), s.bucket, fileKey, 1*time.Hour, reqParams)
+	// Use signClient so the signature is computed for the public host
+	presignedURL, err := s.signClient.PresignedGetObject(context.Background(), s.bucket, fileKey, 1*time.Hour, reqParams)
 	if err != nil {
 		return "", err
 	}
