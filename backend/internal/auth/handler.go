@@ -25,6 +25,122 @@ type nonceResponse struct {
 	Message string `json:"message"`
 }
 
+type signupRequest struct {
+	Username      string `json:"username"`
+	FirstName     string `json:"first_name"`
+	LastName      string `json:"last_name"`
+	Email         string `json:"email"`
+	Phone         string `json:"phone"`
+	Password      string `json:"password"`
+	WalletAddress string `json:"wallet_address"`
+}
+
+type loginRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+// Signup godoc
+// @Summary User signup
+// @Description User signup
+// @Tags auth
+// @Param request body signupRequest true "Signup request payload"
+// @Success 201 {object} authResponse
+// @Failure 400 {object} errorResponse
+// @Router /auth/signup [post]
+func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
+	var req signupRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Валидация — все поля обязательны
+	if req.Username == "" || req.FirstName == "" || req.LastName == "" ||
+		req.Email == "" || req.Phone == "" || req.Password == "" {
+		http.Error(w, `{"error":"all fields are required: username, first_name, last_name, email, phone, password"}`, http.StatusBadRequest)
+		return
+	}
+
+	passwordHash, err := h.authService.HashPassword(req.Password)
+	if err != nil {
+		http.Error(w, `{"error":"failed to process password"}`, http.StatusInternalServerError)
+		return
+	}
+
+	u, err := h.userStore.CreateByCredentials(user.CreateUserInput{
+		Username:      req.Username,
+		FirstName:     req.FirstName,
+		LastName:      req.LastName,
+		Email:         req.Email,
+		Phone:         req.Phone,
+		PasswordHash:  passwordHash,
+		WalletAddress: req.WalletAddress,
+	})
+	if err != nil {
+		// Проверяем конфликт уникальности (username или email уже заняты)
+		if isUniqueViolation(err) {
+			http.Error(w, `{"error":"username or email already taken"}`, http.StatusConflict)
+			return
+		}
+		http.Error(w, `{"error":"failed to create user"}`, http.StatusInternalServerError)
+		return
+	}
+
+	token, err := h.authService.GenerateJWT(u.ID, u.WalletAddress)
+	if err != nil {
+		http.Error(w, `{"error":"failed to generate token"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(authResponse{Token: token, User: u})
+}
+
+// Login godoc
+// @Summary User login
+// @Description User login
+// @Tags auth
+// @Param request body loginRequest true "Login request payload"
+// @Success 200 {object} authResponse
+// @Failure 400 {object} errorResponse
+// @Failure 401 {object} errorResponse
+// @Router /auth/login [post]
+func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
+	var req loginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+
+	if req.Username == "" || req.Password == "" {
+		http.Error(w, `{"error":"username and password are required"}`, http.StatusBadRequest)
+		return
+	}
+
+	u, passwordHash, err := h.userStore.GetByUsername(req.Username)
+	if err != nil {
+		// Намеренно одинаковая ошибка — не раскрываем, существует ли пользователь
+		http.Error(w, `{"error":"invalid username or password"}`, http.StatusUnauthorized)
+		return
+	}
+
+	if err := h.authService.CheckPassword(passwordHash, req.Password); err != nil {
+		http.Error(w, `{"error":"invalid username or password"}`, http.StatusUnauthorized)
+		return
+	}
+
+	token, err := h.authService.GenerateJWT(u.ID, u.WalletAddress)
+	if err != nil {
+		http.Error(w, `{"error":"failed to generate token"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(authResponse{Token: token, User: u})
+}
+
 // GetNonce godoc
 // @Summary Get authentication nonce
 // @Description Returns a nonce for wallet signature authentication

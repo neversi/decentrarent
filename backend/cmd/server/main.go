@@ -110,6 +110,8 @@ func main() {
 	// Auth routes (public)
 	r.Get("/auth/nonce", authHandler.GetNonce)
 	r.Post("/auth/verify", authHandler.Verify)
+	r.Post("/auth/login", authHandler.Login)
+	r.Post("/auth/signup", authHandler.Signup)
 
 	// Centrifugo proxy endpoints
 	r.Post("/centrifugo/connect", centrifugoHandler.Connect)
