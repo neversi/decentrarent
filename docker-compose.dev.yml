@@ -1,0 +1,11 @@
+services:
+  frontend:
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - API_URL=http://backend:8080
+
+  backend:
+    volumes:
+      - ./backend:/app

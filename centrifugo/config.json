@@ -1,0 +1,28 @@
+{
+  "client": {
+    "token": {
+      "hmac_secret_key": "decentrarent-dev-jwt-secret-change-in-production"
+    },
+    "allowed_origins": ["http://localhost:5173"]
+  },
+  "admin": {
+    "enabled": true,
+    "password": "admin",
+    "secret": "admin-secret"
+  },
+  "http_api": {
+    "key": "api-secret"
+  },
+  "channel": {
+    "namespaces": [
+      {
+        "name": "property",
+        "history_size": 50,
+        "history_ttl": "720h",
+        "allow_subscribe_for_client": true,
+        "allow_publish_for_subscriber": true,
+        "force_recovery": true
+      }
+    ]
+  }
+}

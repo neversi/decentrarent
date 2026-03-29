@@ -1,0 +1,54 @@
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - DATABASE_URL=postgres://decentrarent:decentrarent@db:5432/decentrarent?sslmode=disable
+      - JWT_SECRET=decentrarent-dev-jwt-secret-change-in-production
+      - CENTRIFUGO_API_KEY=api-secret
+      - CENTRIFUGO_URL=http://centrifugo:8000
+      - SERVER_PORT=8080
+    depends_on:
+      db:
+        condition: service_healthy
+
+  centrifugo:
+    image: centrifugo/centrifugo:v6.7
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./centrifugo/config.json:/centrifugo/config.json
+    command: centrifugo -c config.json
+    depends_on:
+      - backend
+
+  db:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=decentrarent
+      - POSTGRES_PASSWORD=decentrarent
+      - POSTGRES_DB=decentrarent
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U decentrarent"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
