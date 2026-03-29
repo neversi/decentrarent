@@ -1,0 +1,121 @@
+import { useNavigate } from 'react-router-dom'
+import { useAuthStore } from '../features/auth/store'
+import { useWallet } from '@solana/wallet-adapter-react'
+
+interface MenuItemProps {
+  icon: React.ReactNode
+  label: string
+  sublabel?: string
+  danger?: boolean
+  chevron?: boolean
+  onClick?: () => void
+}
+
+function MenuItem({ icon, label, sublabel, danger, chevron = true, onClick }: MenuItemProps) {
+  return (
+    <button onClick={onClick} style={{
+      width:'100%', display:'flex', alignItems:'center', gap:14, padding:'16px 18px',
+      background:'none', border:'none', cursor:'pointer', textAlign:'left',
+    }}>
+      <div style={{
+        width:38, height:38, borderRadius:11, flexShrink:0,
+        background: danger ? 'rgba(255,77,106,0.1)' : '#1C1C20',
+        border: `1px solid ${danger ? 'rgba(255,77,106,0.2)' : 'rgba(255,255,255,0.07)'}`,
+        display:'flex', alignItems:'center', justifyContent:'center',
+      }}>{icon}</div>
+      <div style={{ flex:1 }}>
+        <p style={{ fontWeight:500, fontSize:14, color: danger ? '#FF4D6A' : '#F0F0F5' }}>{label}</p>
+        {sublabel && <p style={{ color:'#5A5A6A', fontSize:12, marginTop:2 }}>{sublabel}</p>}
+      </div>
+      {chevron && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3A3A4A" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>}
+    </button>
+  )
+}
+
+const Divider = () => <div style={{ height:1, background:'rgba(255,255,255,0.05)', margin:'4px 0' }}/>
+
+export default function ProfilePage() {
+  const { user, logout } = useAuthStore()
+  const { disconnect } = useWallet()
+  const navigate = useNavigate()
+
+  const handleLogout = () => {
+    disconnect()
+    logout()
+    navigate('/auth')
+  }
+
+  if (!user) return null
+
+  const short = user.walletAddress
+    ? user.walletAddress.slice(0, 4) + '…' + user.walletAddress.slice(-4)
+    : 'Wallet'
+
+  return (
+    <div style={{ padding:'0 20px 100px' }}>
+      {/* Header */}
+      <div className="fu" style={{ textAlign:'center', padding:'56px 0 32px' }}>
+        <div style={{
+          width:80, height:80, borderRadius:'50%', margin:'0 auto 16px',
+          background:'linear-gradient(135deg, #E07840, #7A3020)',
+          display:'flex', alignItems:'center', justifyContent:'center',
+          fontFamily:"'Syne',sans-serif", fontWeight:800, fontSize:28, color:'white',
+          boxShadow:'0 8px 32px rgba(224,120,64,0.3)',
+          border:'3px solid rgba(224,120,64,0.3)',
+        }}>
+          {short.slice(0,2).toUpperCase()}
+        </div>
+        <h1 style={{ fontFamily:"'Syne',sans-serif", fontSize:22, fontWeight:800, marginBottom:4 }}>
+          {user.displayName ?? short}
+        </h1>
+        <p style={{ color:'#6A6A7A', fontSize:13, fontFamily:'monospace' }}>{short}</p>
+        <div style={{
+          display:'inline-flex', alignItems:'center', gap:6, marginTop:12,
+          background:'rgba(61,214,140,0.1)', border:'1px solid rgba(61,214,140,0.25)',
+          borderRadius:24, padding:'6px 14px',
+        }}>
+          <div style={{ width:6, height:6, borderRadius:'50%', background:'#3DD68C' }}/>
+          <span style={{ color:'#3DD68C', fontSize:12, fontWeight:600 }}>Verified Landlord</span>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="fu1" style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginBottom:24 }}>
+        {[{ label:'Properties', value:'12' }, { label:'Balance', value:'$24.8K' }, { label:'Occupancy', value:'92%' }].map(s => (
+          <div key={s.label} style={{ background:'#141416', border:'1px solid rgba(255,255,255,0.07)', borderRadius:16, padding:14, textAlign:'center' }}>
+            <p style={{ fontFamily:"'Syne',sans-serif", fontSize:18, fontWeight:700, marginBottom:4 }}>{s.value}</p>
+            <p style={{ color:'#5A5A6A', fontSize:11 }}>{s.label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Account */}
+      <p className="fu2" style={{ fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:13, color:'#4A4A5A', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:12 }}>Account</p>
+      <div className="fu2" style={{ background:'#141416', border:'1px solid rgba(255,255,255,0.07)', borderRadius:16, overflow:'hidden', marginBottom:16 }}>
+        <MenuItem icon={<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#9A9AAA" strokeWidth="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>} label="Personal Info" sublabel="Display name, avatar" />
+        <Divider/>
+        <MenuItem icon={<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#9A9AAA" strokeWidth="1.8"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>} label="Payment Methods" sublabel="Linked accounts" />
+        <Divider/>
+        <MenuItem icon={<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#9A9AAA" strokeWidth="1.8"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>} label="Notifications" sublabel="Push, email, SMS" />
+      </div>
+
+      {/* Settings */}
+      <p className="fu3" style={{ fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:13, color:'#4A4A5A', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:12 }}>Settings</p>
+      <div className="fu3" style={{ background:'#141416', border:'1px solid rgba(255,255,255,0.07)', borderRadius:16, overflow:'hidden', marginBottom:16 }}>
+        <MenuItem icon={<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#9A9AAA" strokeWidth="1.8"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>} label="Security" sublabel="Wallet, sessions" />
+        <Divider/>
+        <MenuItem icon={<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#9A9AAA" strokeWidth="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>} label="Tax Documents" sublabel="1099s, statements" />
+      </div>
+
+      {/* Logout */}
+      <div className="fu4" style={{ background:'#141416', border:'1px solid rgba(255,255,255,0.07)', borderRadius:16, overflow:'hidden', marginBottom:8 }}>
+        <MenuItem
+          icon={<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#FF4D6A" strokeWidth="1.8"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>}
+          label="Disconnect Wallet" danger chevron={false} onClick={handleLogout}
+        />
+      </div>
+
+      <p style={{ textAlign:'center', color:'#3A3A4A', fontSize:11, marginTop:20 }}>PropVault v1.0.0</p>
+    </div>
+  )
+}

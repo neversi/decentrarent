@@ -22,3 +22,4 @@ backend/tmp/
 
 # Docker
 postgres-data/
+node_modules

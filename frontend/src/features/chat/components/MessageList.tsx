@@ -39,7 +39,7 @@ export function MessageList({ messages, currentWallet, onLoadMore }: MessageList
 
   if (messages.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center text-gray-500">
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6A6A7A', padding: '16px' }}>
         No messages yet. Start the conversation!
       </div>
     );
@@ -49,7 +49,7 @@ export function MessageList({ messages, currentWallet, onLoadMore }: MessageList
     <div
       ref={containerRef}
       onScroll={handleScroll}
-      className="flex-1 overflow-y-auto p-4 space-y-3"
+      style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}
     >
       {messages.map((msg) => {
         const isMine = msg.sender_wallet === currentWallet;
