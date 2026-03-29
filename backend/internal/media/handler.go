@@ -21,7 +21,7 @@ func NewHandler(store *Store, s3 *S3Client, propertyStore *property.Store) *Hand
 }
 
 func (h *Handler) checkOwner(r *http.Request) (*property.Property, string, error) {
-	wallet := mw.GetWalletAddress(r.Context())
+	wallet := mw.GetUserID(r.Context())
 	propertyID := chi.URLParam(r, "id")
 	p, err := h.propertyStore.GetByID(propertyID)
 	if err != nil {

@@ -21,7 +21,7 @@ func (s *Store) Migrate() error {
 	queries := []string{
 		`CREATE TABLE IF NOT EXISTS properties (
 			id                  TEXT PRIMARY KEY,
-			owner_wallet        TEXT NOT NULL REFERENCES users(wallet_address),
+			owner_wallet        TEXT NOT NULL REFERENCES users(id),
 			title               TEXT NOT NULL,
 			description         TEXT NOT NULL DEFAULT '',
 			location            TEXT NOT NULL,

@@ -105,7 +105,7 @@ func (s *Service) GenerateJWT(userID, walletAddress string) (string, error) {
 		UserID:        userID,
 		WalletAddress: walletAddress,
 		RegisteredClaims: jwt.RegisteredClaims{
-			Subject:   walletAddress,
+			Subject:   userID,
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},

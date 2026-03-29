@@ -16,6 +16,7 @@ import { ConnectWallet } from './features/auth/components/ConnectWallet'
 import HomePage from './pages/HomePage'
 import ListingsPage from './pages/ListingsPage'
 import CreateListingPage from './pages/CreateListingPage'
+import PropertyDetailPage from './pages/PropertyDetailPage'
 import ProfilePage from './pages/ProfilePage'
 
 // UI
@@ -98,6 +99,17 @@ function AppRoutes() {
           <ProtectedRoute>
             <Layout>
               <CreateListingPage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/listings/:id"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <PropertyDetailPage />
             </Layout>
           </ProtectedRoute>
         }

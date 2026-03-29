@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react';
-import { useWallet } from '@solana/wallet-adapter-react';
 import { useCentrifugo } from '../hooks/useCentrifugo';
 import { useConversations } from '../hooks/useConversations';
 import { useChat } from '../hooks/useChat';
@@ -12,7 +11,6 @@ import { ChatBadge } from './ChatBadge';
 import type { Conversation } from '../types';
 
 export function ChatWindow() {
-  const { publicKey } = useWallet();
   const centrifugoRef = useCentrifugo();
   const { conversations, refetch } = useConversations();
   const { activeConversationId, setActiveConversation, clearUnread } = useChatStore();
@@ -20,7 +18,8 @@ export function ChatWindow() {
   const [seeding, setSeeding] = useState(false);
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
 
-  const currentWallet = publicKey?.toBase58() || '';
+  const { user } = useAuthStore();
+  const currentUserId = user?.id || '';
 
   const activeConv = useMemo(
     () => selectedConversation || conversations.find((c) => c.id === activeConversationId) || null,
@@ -29,7 +28,7 @@ export function ChatWindow() {
 
   const channel = useMemo(() => {
     if (!activeConv) return null;
-    return `property:${activeConv.property_id}:chat:${activeConv.loaner_wallet}`;
+    return `property:${activeConv.property_id}:chat:${activeConv.loaner_id}`;
   }, [activeConv]);
 
   const { messages, sendMessage, loadMore } = useChat(
@@ -56,7 +55,7 @@ export function ChatWindow() {
     }
   };
 
-  const isLandlord = (conv: Conversation) => conv.landlord_wallet === currentWallet;
+  const isLandlord = (conv: Conversation) => conv.landlord_id === currentUserId;
   const shortWallet = (wallet: string) => `${wallet.slice(0, 4)}...${wallet.slice(-4)}`;
   const formatTime = (dateStr: string | null) => {
     if (!dateStr) return '';
@@ -82,8 +81,8 @@ export function ChatWindow() {
               </p>
               <p style={{ fontSize: 12, color: '#6A6A7A' }}>
                 {isLandlord(selectedConversation)
-                  ? `Loaner: ${shortWallet(selectedConversation.loaner_wallet)}`
-                  : `Landlord: ${shortWallet(selectedConversation.landlord_wallet)}`}
+                  ? `Loaner: ${shortWallet(selectedConversation.loaner_id)}`
+                  : `Landlord: ${shortWallet(selectedConversation.landlord_id)}`}
               </p>
             </div>
           </div>
@@ -91,7 +90,7 @@ export function ChatWindow() {
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           <MessageList
             messages={messages}
-            currentWallet={currentWallet}
+            currentUserId={currentUserId}
             onLoadMore={loadMore}
           />
           <MessageInput onSend={sendMessage} />
@@ -122,7 +121,7 @@ export function ChatWindow() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {conversations.map((conv) => {
-            const otherWallet = isLandlord(conv) ? conv.loaner_wallet : conv.landlord_wallet;
+            const otherWallet = isLandlord(conv) ? conv.loaner_id : conv.landlord_id;
             const unread = useChatStore.getState().unreadCounts[conv.id] || 0;
 
             return (

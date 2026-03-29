@@ -3,11 +3,11 @@ import type { Message } from '../types';
 
 interface MessageListProps {
   messages: Message[];
-  currentWallet: string;
+  currentUserId: string;
   onLoadMore: () => Promise<number | undefined>;
 }
 
-export function MessageList({ messages, currentWallet, onLoadMore }: MessageListProps) {
+export function MessageList({ messages, currentUserId, onLoadMore }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const prevLengthRef = useRef(0);
@@ -52,7 +52,7 @@ export function MessageList({ messages, currentWallet, onLoadMore }: MessageList
       style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}
     >
       {messages.map((msg) => {
-        const isMine = msg.sender_wallet === currentWallet;
+        const isMine = msg.sender_id === currentUserId;
         return (
           <div
             key={msg.id}
@@ -67,7 +67,7 @@ export function MessageList({ messages, currentWallet, onLoadMore }: MessageList
             >
               {!isMine && (
                 <p className="text-xs text-gray-400 mb-1">
-                  {shortWallet(msg.sender_wallet)}
+                  {shortWallet(msg.sender_id)}
                 </p>
               )}
               <p className="text-sm break-words">{msg.content}</p>

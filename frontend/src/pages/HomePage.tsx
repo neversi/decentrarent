@@ -1,46 +1,45 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../features/auth/store'
+import { listProperties } from '../features/properties/api'
+import { formatPrice, TOKEN_INFO } from '../features/properties/utils'
+import type { Property } from '../features/properties/types'
 
-interface Listing {
-  id: number
-  title: string
-  city: string
-  rent: number
-  status: 'occupied' | 'vacant' | 'leased'
-  img: string
+const STATUS_STYLE: Record<string, { bg: string; color: string; label: string }> = {
+  listed:   { bg: 'rgba(61,214,140,0.12)',  color: '#3DD68C', label: 'Occupied' },
+  unlisted: { bg: 'rgba(255,77,106,0.12)',  color: '#FF4D6A', label: 'Vacant'   },
+  rented:   { bg: 'rgba(224,120,64,0.12)', color: '#E07840', label: 'Leased'   },
 }
 
-// TODO: replace with GET /api/listings
-const MOCK_LISTINGS: Listing[] = [
-  { id: 1, title: '1042 Market St.',     city: 'San Francisco, CA', rent: 4200, status: 'occupied', img: '🏢' },
-  { id: 2, title: 'Apt 4B, The Beacon', city: 'Seattle, WA',       rent: 2800, status: 'vacant',   img: '🏠' },
-  { id: 3, title: 'Riverside Loft',     city: 'Austin, TX',        rent: 3100, status: 'occupied', img: '🏗️' },
-  { id: 4, title: 'Pine St. Office',    city: 'Portland, OR',      rent: 5800, status: 'leased',   img: '🏬' },
-]
-
-const STATUS_STYLE = {
-  occupied: { bg: 'rgba(61,214,140,0.12)',  color: '#3DD68C', label: 'Occupied' },
-  vacant:   { bg: 'rgba(255,77,106,0.12)',  color: '#FF4D6A', label: 'Vacant'   },
-  leased:   { bg: 'rgba(224,120,64,0.12)', color: '#E07840', label: 'Leased'   },
-}
+const FALLBACK_STYLE = { bg: 'rgba(255,255,255,0.06)', color: '#7A7A8A', label: 'Unknown' }
 
 export default function HomePage() {
-  const { user, isAuthenticated } = useAuthStore()
+  const { user, token, isAuthenticated } = useAuthStore()
   const navigate = useNavigate()
-// TODO: add setListings and fetch real listings from API
-  const [listings] = useState<Listing[]>(MOCK_LISTINGS)
+  const [listings, setListings] = useState<Property[]>([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!isAuthenticated) navigate('/auth')
-    // TODO: fetch('/api/listings').then(r => r.json()).then(setListings)
-  }, [isAuthenticated, navigate])
+    if (!isAuthenticated) {
+      navigate('/auth')
+      return
+    }
+    if (!user) return
 
-  if (!user) return <div style={{ padding: '20px', color: '#ddd' }}>Loading your dashboard…</div>
+    setLoading(true)
+    listProperties({ owner: user.id }, token)
+      .then(setListings)
+      .catch(() => setListings([]))
+      .finally(() => setLoading(false))
+  }, [isAuthenticated, navigate, user, token])
+
+  if (!user) return <div style={{ padding: '20px', color: '#ddd' }}>Loading your dashboard...</div>
 
   const firstName = user.display_name ?? user.wallet_address.slice(0, 8)
   const userBalance = typeof user.balance === 'number' ? user.balance : 0
-  const totalIncome = listings.filter(l => l.status !== 'vacant').reduce((s, l) => s + l.rent, 0)
+  const totalIncome = listings
+    .filter(l => l.status !== 'unlisted')
+    .reduce((s, l) => s + l.price, 0)
 
   return (
     <div style={{ padding: '0 20px 100px' }}>
@@ -86,7 +85,7 @@ export default function HomePage() {
           </div>
           <div style={{ textAlign: 'right' }}>
             <p style={{ color: '#6A6A5A', fontSize: 11, marginBottom: 4 }}>Active Listings</p>
-            <p style={{ fontWeight: 700, fontSize: 16 }}>{listings.filter(l => l.status !== 'vacant').length}/{listings.length}</p>
+            <p style={{ fontWeight: 700, fontSize: 16 }}>{listings.filter(l => l.status !== 'unlisted').length}/{listings.length}</p>
           </div>
         </div>
       </div>
@@ -113,26 +112,43 @@ export default function HomePage() {
           <p style={{ fontFamily: "'Syne',sans-serif", fontWeight: 700, fontSize: 13, color: '#4A4A5A', textTransform: 'uppercase', letterSpacing: '0.06em' }}>My Listings</p>
           <Link to="/listings" style={{ color: '#E07840', fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>See all</Link>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {listings.map((l) => {
-            const s = STATUS_STYLE[l.status]
-            return (
-              <Link key={l.id} to={`/listings/${l.id}`} style={{ textDecoration: 'none' }}>
-                <div style={{ background: '#141416', borderRadius: 16, border: '1px solid rgba(255,255,255,0.07)', padding: '16px 18px', display: 'flex', alignItems: 'center', gap: 14 }}>
-                  <div style={{ width: 46, height: 46, borderRadius: 12, background: '#1C1C20', border: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{l.img}</div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontWeight: 600, fontSize: 14, marginBottom: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.title}</p>
-                    <p style={{ color: '#6A6A7A', fontSize: 12 }}>{l.city}</p>
+
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '40px 0', color: '#6A6A7A', fontSize: 14 }}>Loading listings...</div>
+        ) : listings.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '40px 0', color: '#6A6A7A', fontSize: 14 }}>No listings yet. Create your first one!</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {listings.map((l) => {
+              const s = STATUS_STYLE[l.status] ?? FALLBACK_STYLE
+              const img = l.media?.[0]?.url
+              return (
+                <Link key={l.id} to={`/listings/${l.id}`} style={{ textDecoration: 'none' }}>
+                  <div style={{ background: '#141416', borderRadius: 16, border: '1px solid rgba(255,255,255,0.07)', padding: '16px 18px', display: 'flex', alignItems: 'center', gap: 14 }}>
+                    <div style={{ width: 46, height: 46, borderRadius: 12, background: '#1C1C20', border: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0, overflow: 'hidden' }}>
+                      {img
+                        ? <img src={img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        : '🏠'}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontWeight: 600, fontSize: 14, marginBottom: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.title}</p>
+                      <p style={{ color: '#6A6A7A', fontSize: 12 }}>{l.location}</p>
+                    </div>
+                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                      <p style={{ fontWeight: 700, fontSize: 14, marginBottom: 5, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
+                      {l.status === 'unlisted' ? '—' : <>
+                        <img src={TOKEN_INFO[l.token_mint]?.icon || TOKEN_INFO['SOL'].icon} alt="" style={{ width: 14, height: 14, borderRadius: '50%' }} />
+                        {formatPrice(l.price, l.token_mint)}
+                      </>}
+                    </p>
+                      <span style={{ background: s.bg, color: s.color, padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600 }}>{s.label}</span>
+                    </div>
                   </div>
-                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                    <p style={{ fontWeight: 700, fontSize: 14, marginBottom: 5 }}>{l.status === 'vacant' ? '—' : `$${l.rent.toLocaleString()}`}</p>
-                    <span style={{ background: s.bg, color: s.color, padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600 }}>{s.label}</span>
-                  </div>
-                </div>
-              </Link>
-            )
-          })}
-        </div>
+                </Link>
+              )
+            })}
+          </div>
+        )}
       </div>
     </div>
   )

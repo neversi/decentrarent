@@ -53,8 +53,8 @@ func (h *Handler) enrich(p *Property) PropertyResponse {
 // @Success 201 {object} PropertyResponse
 // @Router /properties [post]
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
-	wallet := mw.GetWalletAddress(r.Context())
-	if wallet == "" {
+	userID := mw.GetUserID(r.Context())
+	if userID == "" {
 		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 		return
 	}
@@ -74,7 +74,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		req.TokenMint = "SOL"
 	}
 
-	p, err := h.service.CreateProperty(wallet, &req)
+	p, err := h.service.CreateProperty(userID, &req)
 	if err != nil {
 		http.Error(w, `{"error":"failed to create property"}`, http.StatusInternalServerError)
 		return
@@ -180,7 +180,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 // @Failure 403 {object} map[string]string
 // @Router /properties/{id} [put]
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
-	wallet := mw.GetWalletAddress(r.Context())
+	userID := mw.GetUserID(r.Context())
 	id := chi.URLParam(r, "id")
 
 	p, err := h.store.GetByID(id)
@@ -188,7 +188,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"property not found"}`, http.StatusNotFound)
 		return
 	}
-	if p.OwnerWallet != wallet {
+	if p.OwnerWallet != userID {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
@@ -221,7 +221,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 // @Success 200 {object} PropertyResponse
 // @Router /properties/{id}/status [patch]
 func (h *Handler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
-	wallet := mw.GetWalletAddress(r.Context())
+	userID := mw.GetUserID(r.Context())
 	id := chi.URLParam(r, "id")
 
 	p, err := h.store.GetByID(id)
@@ -229,7 +229,7 @@ func (h *Handler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"property not found"}`, http.StatusNotFound)
 		return
 	}
-	if p.OwnerWallet != wallet {
+	if p.OwnerWallet != userID {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
@@ -265,7 +265,7 @@ func (h *Handler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 // @Failure 403 {object} map[string]string
 // @Router /properties/{id} [delete]
 func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
-	wallet := mw.GetWalletAddress(r.Context())
+	userID := mw.GetUserID(r.Context())
 	id := chi.URLParam(r, "id")
 
 	p, err := h.store.GetByID(id)
@@ -273,7 +273,7 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"property not found"}`, http.StatusNotFound)
 		return
 	}
-	if p.OwnerWallet != wallet {
+	if p.OwnerWallet != userID {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}

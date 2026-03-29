@@ -87,6 +87,21 @@ func (s *Store) GetByUsername(username string) (*User, string, error) {
 	return u, passwordHash, nil
 }
 
+func (s *Store) GetByWallet(walletAddress string) (*User, error) {
+	u := &User{}
+	err := s.db.QueryRow(
+		`SELECT id, COALESCE(wallet_address,''), COALESCE(username,''), first_name, last_name,
+		        COALESCE(email,''), COALESCE(phone,''), display_name, created_at
+		 FROM users WHERE wallet_address = $1`,
+		walletAddress,
+	).Scan(&u.ID, &u.WalletAddress, &u.Username, &u.FirstName, &u.LastName,
+		&u.Email, &u.Phone, &u.DisplayName, &u.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return u, nil
+}
+
 func (s *Store) UpsertByWallet(walletAddress string) (*User, error) {
 	u := &User{}
 	err := s.db.QueryRow(

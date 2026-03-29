@@ -206,9 +206,15 @@ func (h *Handler) Verify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	u, err := h.userStore.UpsertByWallet(req.Wallet)
+	u, err := h.userStore.GetByWallet(req.Wallet)
 	if err != nil {
-		http.Error(w, `{"error":"failed to create user"}`, http.StatusInternalServerError)
+		// Wallet not registered — frontend should redirect to registration
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error":  "wallet_not_registered",
+			"wallet": req.Wallet,
+		})
 		return
 	}
 

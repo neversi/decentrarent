@@ -20,24 +20,24 @@ func (s *Store) Migrate() error {
 		`CREATE TABLE IF NOT EXISTS conversations (
 			id TEXT PRIMARY KEY,
 			property_id TEXT NOT NULL,
-			landlord_wallet TEXT NOT NULL,
-			loaner_wallet TEXT NOT NULL,
+			landlord_id TEXT NOT NULL,
+			loaner_id TEXT NOT NULL,
 			last_message TEXT,
 			last_message_at TIMESTAMP,
 			created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-			UNIQUE(property_id, loaner_wallet)
+			UNIQUE(property_id, loaner_id)
 		)`,
 		`CREATE TABLE IF NOT EXISTS messages (
 			id TEXT PRIMARY KEY,
 			conversation_id TEXT NOT NULL REFERENCES conversations(id),
-			sender_wallet TEXT NOT NULL,
+			sender_id TEXT NOT NULL,
 			content TEXT NOT NULL,
 			created_at TIMESTAMP NOT NULL DEFAULT NOW()
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_messages_conversation_created
 			ON messages(conversation_id, created_at DESC)`,
-		`CREATE INDEX IF NOT EXISTS idx_conversations_wallets
-			ON conversations(landlord_wallet, loaner_wallet)`,
+		`CREATE INDEX IF NOT EXISTS idx_conversations_users
+			ON conversations(landlord_id, loaner_id)`,
 	}
 	for _, q := range queries {
 		if _, err := s.db.Exec(q); err != nil {
@@ -47,27 +47,27 @@ func (s *Store) Migrate() error {
 	return nil
 }
 
-func (s *Store) GetOrCreateConversation(propertyID, landlordWallet, loanerWallet string) (*Conversation, error) {
+func (s *Store) GetOrCreateConversation(propertyID, landlordID, loanerID string) (*Conversation, error) {
 	conv := &Conversation{}
 	err := s.db.QueryRow(
-		`SELECT id, property_id, landlord_wallet, loaner_wallet, last_message, last_message_at, created_at
-		 FROM conversations WHERE property_id = $1 AND loaner_wallet = $2`,
-		propertyID, loanerWallet,
-	).Scan(&conv.ID, &conv.PropertyID, &conv.LandlordWallet, &conv.LoanerWallet,
+		`SELECT id, property_id, landlord_id, loaner_id, last_message, last_message_at, created_at
+		 FROM conversations WHERE property_id = $1 AND loaner_id = $2`,
+		propertyID, loanerID,
+	).Scan(&conv.ID, &conv.PropertyID, &conv.LandlordID, &conv.LoanerID,
 		&conv.LastMessage, &conv.LastMessageAt, &conv.CreatedAt)
 
 	if err == sql.ErrNoRows {
 		conv = &Conversation{
-			ID:             uuid.New().String(),
-			PropertyID:     propertyID,
-			LandlordWallet: landlordWallet,
-			LoanerWallet:   loanerWallet,
-			CreatedAt:      time.Now(),
+			ID:         uuid.New().String(),
+			PropertyID: propertyID,
+			LandlordID: landlordID,
+			LoanerID:   loanerID,
+			CreatedAt:  time.Now(),
 		}
 		_, err = s.db.Exec(
-			`INSERT INTO conversations (id, property_id, landlord_wallet, loaner_wallet, created_at)
+			`INSERT INTO conversations (id, property_id, landlord_id, loaner_id, created_at)
 			 VALUES ($1, $2, $3, $4, $5)`,
-			conv.ID, conv.PropertyID, conv.LandlordWallet, conv.LoanerWallet, conv.CreatedAt,
+			conv.ID, conv.PropertyID, conv.LandlordID, conv.LoanerID, conv.CreatedAt,
 		)
 		if err != nil {
 			return nil, err
@@ -80,13 +80,13 @@ func (s *Store) GetOrCreateConversation(propertyID, landlordWallet, loanerWallet
 	return conv, nil
 }
 
-func (s *Store) ListConversations(walletAddress string) ([]Conversation, error) {
+func (s *Store) ListConversations(userID string) ([]Conversation, error) {
 	rows, err := s.db.Query(
-		`SELECT id, property_id, landlord_wallet, loaner_wallet, last_message, last_message_at, created_at
+		`SELECT id, property_id, landlord_id, loaner_id, last_message, last_message_at, created_at
 		 FROM conversations
-		 WHERE landlord_wallet = $1 OR loaner_wallet = $1
+		 WHERE landlord_id = $1 OR loaner_id = $1
 		 ORDER BY COALESCE(last_message_at, created_at) DESC`,
-		walletAddress,
+		userID,
 	)
 	if err != nil {
 		return nil, err
@@ -96,7 +96,7 @@ func (s *Store) ListConversations(walletAddress string) ([]Conversation, error) 
 	var convs []Conversation
 	for rows.Next() {
 		var c Conversation
-		if err := rows.Scan(&c.ID, &c.PropertyID, &c.LandlordWallet, &c.LoanerWallet,
+		if err := rows.Scan(&c.ID, &c.PropertyID, &c.LandlordID, &c.LoanerID,
 			&c.LastMessage, &c.LastMessageAt, &c.CreatedAt); err != nil {
 			return nil, err
 		}
@@ -105,25 +105,24 @@ func (s *Store) ListConversations(walletAddress string) ([]Conversation, error) 
 	return convs, nil
 }
 
-func (s *Store) SaveMessage(conversationID, senderWallet, content string) (*Message, error) {
+func (s *Store) SaveMessage(conversationID, senderID, content string) (*Message, error) {
 	msg := &Message{
 		ID:             uuid.New().String(),
 		ConversationID: conversationID,
-		SenderWallet:   senderWallet,
+		SenderID:       senderID,
 		Content:        content,
 		CreatedAt:      time.Now(),
 	}
 
 	_, err := s.db.Exec(
-		`INSERT INTO messages (id, conversation_id, sender_wallet, content, created_at)
+		`INSERT INTO messages (id, conversation_id, sender_id, content, created_at)
 		 VALUES ($1, $2, $3, $4, $5)`,
-		msg.ID, msg.ConversationID, msg.SenderWallet, msg.Content, msg.CreatedAt,
+		msg.ID, msg.ConversationID, msg.SenderID, msg.Content, msg.CreatedAt,
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	// Update conversation last_message
 	_, err = s.db.Exec(
 		`UPDATE conversations SET last_message = $1, last_message_at = $2 WHERE id = $3`,
 		content, msg.CreatedAt, conversationID,
@@ -141,7 +140,7 @@ func (s *Store) GetMessages(conversationID string, before *time.Time, limit int)
 
 	if before != nil {
 		rows, err = s.db.Query(
-			`SELECT id, conversation_id, sender_wallet, content, created_at
+			`SELECT id, conversation_id, sender_id, content, created_at
 			 FROM messages
 			 WHERE conversation_id = $1 AND created_at < $2
 			 ORDER BY created_at DESC LIMIT $3`,
@@ -149,7 +148,7 @@ func (s *Store) GetMessages(conversationID string, before *time.Time, limit int)
 		)
 	} else {
 		rows, err = s.db.Query(
-			`SELECT id, conversation_id, sender_wallet, content, created_at
+			`SELECT id, conversation_id, sender_id, content, created_at
 			 FROM messages
 			 WHERE conversation_id = $1
 			 ORDER BY created_at DESC LIMIT $2`,
@@ -164,7 +163,7 @@ func (s *Store) GetMessages(conversationID string, before *time.Time, limit int)
 	var msgs []Message
 	for rows.Next() {
 		var m Message
-		if err := rows.Scan(&m.ID, &m.ConversationID, &m.SenderWallet, &m.Content, &m.CreatedAt); err != nil {
+		if err := rows.Scan(&m.ID, &m.ConversationID, &m.SenderID, &m.Content, &m.CreatedAt); err != nil {
 			return nil, err
 		}
 		msgs = append(msgs, m)
@@ -181,9 +180,9 @@ func (s *Store) GetMessages(conversationID string, before *time.Time, limit int)
 func (s *Store) GetConversation(id string) (*Conversation, error) {
 	conv := &Conversation{}
 	err := s.db.QueryRow(
-		`SELECT id, property_id, landlord_wallet, loaner_wallet, last_message, last_message_at, created_at
+		`SELECT id, property_id, landlord_id, loaner_id, last_message, last_message_at, created_at
 		 FROM conversations WHERE id = $1`, id,
-	).Scan(&conv.ID, &conv.PropertyID, &conv.LandlordWallet, &conv.LoanerWallet,
+	).Scan(&conv.ID, &conv.PropertyID, &conv.LandlordID, &conv.LoanerID,
 		&conv.LastMessage, &conv.LastMessageAt, &conv.CreatedAt)
 	if err != nil {
 		return nil, err

@@ -3,14 +3,14 @@ import { ChatBadge } from './ChatBadge';
 import type { Conversation } from '../types';
 
 interface ConversationListProps {
-  currentWallet: string;
+  currentUserId: string;
   onSelect: (conv: Conversation) => void;
 }
 
-export function ConversationList({ currentWallet, onSelect }: ConversationListProps) {
+export function ConversationList({ currentUserId, onSelect }: ConversationListProps) {
   const { conversations, activeConversationId, unreadCounts } = useChatStore();
 
-  const isLandlord = (conv: Conversation) => conv.landlord_wallet === currentWallet;
+  const isLandlord = (conv: Conversation) => conv.landlord_id === currentUserId;
 
   const shortWallet = (wallet: string) =>
     `${wallet.slice(0, 4)}...${wallet.slice(-4)}`;
@@ -36,7 +36,7 @@ export function ConversationList({ currentWallet, onSelect }: ConversationListPr
   return (
     <div className="divide-y divide-gray-800">
       {conversations.map((conv) => {
-        const otherWallet = isLandlord(conv) ? conv.loaner_wallet : conv.landlord_wallet;
+        const otherWallet = isLandlord(conv) ? conv.loaner_id : conv.landlord_id;
         const isActive = conv.id === activeConversationId;
         const unread = unreadCounts[conv.id] || 0;
 

@@ -28,13 +28,13 @@ func NewHandler(store *Store) *Handler {
 // @Success 200 {array} Conversation
 // @Router /conversations [get]
 func (h *Handler) ListConversations(w http.ResponseWriter, r *http.Request) {
-	wallet := mw.GetWalletAddress(r.Context())
-	if wallet == "" {
+	id := mw.GetUserID(r.Context())
+	if id == "" {
 		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 		return
 	}
 
-	convs, err := h.store.ListConversations(wallet)
+	convs, err := h.store.ListConversations(id)
 	if err != nil {
 		http.Error(w, `{"error":"failed to list conversations"}`, http.StatusInternalServerError)
 		return
@@ -60,8 +60,8 @@ func (h *Handler) ListConversations(w http.ResponseWriter, r *http.Request) {
 // @Success 200 {array} Message
 // @Router /conversations/{id}/messages [get]
 func (h *Handler) GetMessages(w http.ResponseWriter, r *http.Request) {
-	wallet := mw.GetWalletAddress(r.Context())
-	if wallet == "" {
+	id := mw.GetUserID(r.Context())
+	if id == "" {
 		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 		return
 	}
@@ -74,7 +74,7 @@ func (h *Handler) GetMessages(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"conversation not found"}`, http.StatusNotFound)
 		return
 	}
-	if conv.LandlordWallet != wallet && conv.LoanerWallet != wallet {
+	if conv.LandlordID != id && conv.LoanerID != id {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
@@ -123,8 +123,8 @@ type sendMessageRequest struct {
 // @Success 200 {object} Message
 // @Router /conversations/messages [post]
 func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
-	wallet := mw.GetWalletAddress(r.Context())
-	if wallet == "" {
+	id := mw.GetUserID(r.Context())
+	if id == "" {
 		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 		return
 	}
@@ -140,12 +140,12 @@ func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"conversation not found"}`, http.StatusNotFound)
 		return
 	}
-	if conv.LandlordWallet != wallet && conv.LoanerWallet != wallet {
+	if conv.LandlordID != id && conv.LoanerID != id {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
 
-	msg, err := h.store.SaveMessage(conv.ID, wallet, req.Content)
+	msg, err := h.store.SaveMessage(conv.ID, id, req.Content)
 	if err != nil {
 		http.Error(w, `{"error":"failed to save message"}`, http.StatusInternalServerError)
 		return
@@ -158,8 +158,8 @@ func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 // SeedChat creates a mock conversation for dev/testing.
 // The authenticated user becomes the loaner, a fake landlord is created.
 func (h *Handler) SeedChat(w http.ResponseWriter, r *http.Request) {
-	wallet := mw.GetWalletAddress(r.Context())
-	if wallet == "" {
+	id := mw.GetUserID(r.Context())
+	if id == "" {
 		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 		return
 	}
@@ -167,7 +167,7 @@ func (h *Handler) SeedChat(w http.ResponseWriter, r *http.Request) {
 	mockLandlord := "DevLandlord111111111111111111111111111111111"
 	propertyID := "prop-1042-market-st"
 
-	conv, err := h.store.GetOrCreateConversation(propertyID, mockLandlord, wallet)
+	conv, err := h.store.GetOrCreateConversation(propertyID, mockLandlord, id)
 	if err != nil {
 		http.Error(w, `{"error":"failed to seed conversation"}`, http.StatusInternalServerError)
 		return
