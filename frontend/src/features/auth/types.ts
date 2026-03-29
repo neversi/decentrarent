@@ -3,6 +3,7 @@ export interface User {
   wallet_address: string;
   display_name: string;
   created_at: string;
+  balance: number;
 }
 
 export interface AuthResponse {
