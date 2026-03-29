@@ -19,6 +19,14 @@ func NewHandler(store *Store) *Handler {
 	return &Handler{store: store}
 }
 
+// ListConversations godoc
+// @Summary List conversations
+// @Description Returns all conversations for the authenticated user
+// @Tags chat
+// @Security BearerAuth
+// @Produce json
+// @Success 200 {array} Conversation
+// @Router /conversations [get]
 func (h *Handler) ListConversations(w http.ResponseWriter, r *http.Request) {
 	wallet := mw.GetWalletAddress(r.Context())
 	if wallet == "" {
@@ -40,6 +48,17 @@ func (h *Handler) ListConversations(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(convs)
 }
 
+// GetMessages godoc
+// @Summary Get messages
+// @Description Returns messages for a conversation with pagination
+// @Tags chat
+// @Security BearerAuth
+// @Produce json
+// @Param id path string true "Conversation ID"
+// @Param before query string false "Load messages before this timestamp (RFC3339)"
+// @Param limit query int false "Limit results (default 20, max 100)"
+// @Success 200 {array} Message
+// @Router /conversations/{id}/messages [get]
 func (h *Handler) GetMessages(w http.ResponseWriter, r *http.Request) {
 	wallet := mw.GetWalletAddress(r.Context())
 	if wallet == "" {
@@ -93,6 +112,16 @@ type sendMessageRequest struct {
 	Content        string `json:"content"`
 }
 
+// SendMessage godoc
+// @Summary Send a message
+// @Description Sends a message in a conversation
+// @Tags chat
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param body body sendMessageRequest true "Message content"
+// @Success 200 {object} Message
+// @Router /conversations/messages [post]
 func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	wallet := mw.GetWalletAddress(r.Context())
 	if wallet == "" {

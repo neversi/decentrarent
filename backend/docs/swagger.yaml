@@ -1,0 +1,615 @@
+basePath: /
+definitions:
+  auth.authResponse:
+    properties:
+      token:
+        type: string
+      user:
+        $ref: '#/definitions/user.User'
+    type: object
+  auth.nonceResponse:
+    properties:
+      message:
+        type: string
+      nonce:
+        type: string
+    type: object
+  auth.verifyRequest:
+    properties:
+      nonce:
+        type: string
+      signature:
+        type: string
+      wallet:
+        type: string
+    type: object
+  chat.Conversation:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: string
+      landlord_wallet:
+        type: string
+      last_message:
+        type: string
+      last_message_at:
+        type: string
+      loaner_wallet:
+        type: string
+      property_id:
+        type: string
+    type: object
+  chat.Message:
+    properties:
+      content:
+        type: string
+      conversation_id:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: string
+      sender_wallet:
+        type: string
+    type: object
+  chat.sendMessageRequest:
+    properties:
+      content:
+        type: string
+      conversation_id:
+        type: string
+    type: object
+  media.PropertyMedia:
+    properties:
+      created_at:
+        type: string
+      file_key:
+        type: string
+      id:
+        type: string
+      property_id:
+        type: string
+      sort_order:
+        type: integer
+    type: object
+  media.RegisterMediaRequest:
+    properties:
+      file_key:
+        type: string
+    type: object
+  media.ReorderRequest:
+    properties:
+      order:
+        items:
+          type: string
+        type: array
+    type: object
+  media.UploadURLRequest:
+    properties:
+      file_name:
+        type: string
+    type: object
+  media.UploadURLResponse:
+    properties:
+      file_key:
+        type: string
+      upload_url:
+        type: string
+    type: object
+  property.CreatePropertyRequest:
+    properties:
+      description:
+        type: string
+      location:
+        type: string
+      period_type:
+        type: string
+      price:
+        type: integer
+      title:
+        type: string
+      token_mint:
+        type: string
+    type: object
+  property.PropertyResponse:
+    properties:
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      location:
+        type: string
+      media:
+        items:
+          additionalProperties: true
+          type: object
+        type: array
+      owner_wallet:
+        type: string
+      period_type:
+        type: string
+      price:
+        type: integer
+      status:
+        type: string
+      title:
+        type: string
+      token_mint:
+        type: string
+      updated_at:
+        type: string
+      verification_status:
+        type: string
+    type: object
+  property.StatusRequest:
+    properties:
+      status:
+        type: string
+    type: object
+  property.UpdatePropertyRequest:
+    properties:
+      description:
+        type: string
+      location:
+        type: string
+      period_type:
+        type: string
+      price:
+        type: integer
+      title:
+        type: string
+      token_mint:
+        type: string
+    type: object
+  user.User:
+    properties:
+      created_at:
+        type: string
+      display_name:
+        type: string
+      id:
+        type: string
+      wallet_address:
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: API for DecentraRent - Solana dApp for asset renting
+  title: DecentraRent API
+  version: "1.0"
+paths:
+  /auth/nonce:
+    get:
+      description: Returns a nonce for wallet signature authentication
+      parameters:
+      - description: Wallet address
+        in: query
+        name: wallet
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/auth.nonceResponse'
+      summary: Get authentication nonce
+      tags:
+      - auth
+  /auth/refresh:
+    post:
+      description: Returns a new JWT token
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/auth.authResponse'
+      security:
+      - BearerAuth: []
+      summary: Refresh JWT token
+      tags:
+      - auth
+  /auth/verify:
+    post:
+      consumes:
+      - application/json
+      description: Verifies wallet signature and returns JWT token
+      parameters:
+      - description: Verification request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/auth.verifyRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/auth.authResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Verify wallet signature
+      tags:
+      - auth
+  /conversations:
+    get:
+      description: Returns all conversations for the authenticated user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/chat.Conversation'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List conversations
+      tags:
+      - chat
+  /conversations/{id}/messages:
+    get:
+      description: Returns messages for a conversation with pagination
+      parameters:
+      - description: Conversation ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Load messages before this timestamp (RFC3339)
+        in: query
+        name: before
+        type: string
+      - description: Limit results (default 20, max 100)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/chat.Message'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: Get messages
+      tags:
+      - chat
+  /conversations/messages:
+    post:
+      consumes:
+      - application/json
+      description: Sends a message in a conversation
+      parameters:
+      - description: Message content
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/chat.sendMessageRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/chat.Message'
+      security:
+      - BearerAuth: []
+      summary: Send a message
+      tags:
+      - chat
+  /properties:
+    get:
+      description: Returns a filtered list of properties with media
+      parameters:
+      - description: Filter by status (listed, unlisted, rented)
+        in: query
+        name: status
+        type: string
+      - description: Filter by owner wallet
+        in: query
+        name: owner
+        type: string
+      - description: Filter by token mint (SOL, USDC, USDT)
+        in: query
+        name: token_mint
+        type: string
+      - description: Filter by period type (hour, day, month)
+        in: query
+        name: period_type
+        type: string
+      - description: Limit results (default 20, max 100)
+        in: query
+        name: limit
+        type: integer
+      - description: Offset for pagination
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/property.PropertyResponse'
+            type: array
+      summary: List properties
+      tags:
+      - properties
+    post:
+      consumes:
+      - application/json
+      description: Creates a new property listing for the authenticated user
+      parameters:
+      - description: Property details
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/property.CreatePropertyRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/property.PropertyResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a property listing
+      tags:
+      - properties
+  /properties/{id}:
+    delete:
+      description: Deletes a property and all its media (owner only)
+      parameters:
+      - description: Property ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete a property
+      tags:
+      - properties
+    get:
+      description: Returns a single property with media
+      parameters:
+      - description: Property ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/property.PropertyResponse'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get property by ID
+      tags:
+      - properties
+    put:
+      consumes:
+      - application/json
+      description: Updates property fields (owner only)
+      parameters:
+      - description: Property ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Fields to update
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/property.UpdatePropertyRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/property.PropertyResponse'
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update a property
+      tags:
+      - properties
+  /properties/{id}/media:
+    post:
+      consumes:
+      - application/json
+      description: Registers a media file after it has been uploaded to MinIO (owner
+        only)
+      parameters:
+      - description: Property ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: File key from upload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/media.RegisterMediaRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/media.PropertyMedia'
+      security:
+      - BearerAuth: []
+      summary: Register uploaded media
+      tags:
+      - media
+  /properties/{id}/media/{mediaId}:
+    delete:
+      description: Deletes a media item and its S3 object (owner only)
+      parameters:
+      - description: Property ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Media ID
+        in: path
+        name: mediaId
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+      security:
+      - BearerAuth: []
+      summary: Delete media
+      tags:
+      - media
+  /properties/{id}/media/order:
+    put:
+      consumes:
+      - application/json
+      description: Updates the sort order of media items (owner only)
+      parameters:
+      - description: Property ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Ordered list of media IDs
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/media.ReorderRequest'
+      responses:
+        "204":
+          description: No Content
+      security:
+      - BearerAuth: []
+      summary: Reorder media
+      tags:
+      - media
+  /properties/{id}/media/upload-url:
+    post:
+      consumes:
+      - application/json
+      description: Returns a presigned MinIO URL for direct file upload (owner only)
+      parameters:
+      - description: Property ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: File name
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/media.UploadURLRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/media.UploadURLResponse'
+      security:
+      - BearerAuth: []
+      summary: Get presigned upload URL
+      tags:
+      - media
+  /properties/{id}/status:
+    patch:
+      consumes:
+      - application/json
+      description: Updates property status to listed or unlisted (owner only)
+      parameters:
+      - description: Property ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: New status
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/property.StatusRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/property.PropertyResponse'
+      security:
+      - BearerAuth: []
+      summary: Change property status
+      tags:
+      - properties
+  /user/me:
+    get:
+      description: Returns the authenticated user's profile
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/user.User'
+      security:
+      - BearerAuth: []
+      summary: Get current user
+      tags:
+      - user
+securityDefinitions:
+  BearerAuth:
+    description: Enter "Bearer {token}"
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

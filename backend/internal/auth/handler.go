@@ -25,6 +25,13 @@ type nonceResponse struct {
 	Message string `json:"message"`
 }
 
+// GetNonce godoc
+// @Summary Get authentication nonce
+// @Description Returns a nonce for wallet signature authentication
+// @Tags auth
+// @Param wallet query string true "Wallet address"
+// @Success 200 {object} nonceResponse
+// @Router /auth/nonce [get]
 func (h *Handler) GetNonce(w http.ResponseWriter, r *http.Request) {
 	wallet := r.URL.Query().Get("wallet")
 	if wallet == "" {
@@ -56,6 +63,16 @@ type authResponse struct {
 	User  *user.User `json:"user"`
 }
 
+// Verify godoc
+// @Summary Verify wallet signature
+// @Description Verifies wallet signature and returns JWT token
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param body body verifyRequest true "Verification request"
+// @Success 200 {object} authResponse
+// @Failure 401 {object} map[string]string
+// @Router /auth/verify [post]
 func (h *Handler) Verify(w http.ResponseWriter, r *http.Request) {
 	var req verifyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -92,6 +109,13 @@ func (h *Handler) Verify(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// Refresh godoc
+// @Summary Refresh JWT token
+// @Description Returns a new JWT token
+// @Tags auth
+// @Security BearerAuth
+// @Success 200 {object} authResponse
+// @Router /auth/refresh [post]
 func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	userID := mw.GetUserID(r.Context())
 	if userID == "" {
