@@ -1,6 +1,9 @@
 package config
 
-import "os"
+import (
+	"os"
+	"strings"
+)
 
 type Config struct {
 	DatabaseURL         string
@@ -14,6 +17,7 @@ type Config struct {
 	MinioSecretKey      string
 	MinioBucket         string
 	MinioUseSSL         bool
+	KafkaBrokers        []string
 }
 
 func Load() *Config {
@@ -29,6 +33,7 @@ func Load() *Config {
 		MinioSecretKey:      getEnv("MINIO_SECRET_KEY", "decentrarent"),
 		MinioBucket:         getEnv("MINIO_BUCKET", "decentrarent-media"),
 		MinioUseSSL:         getEnv("MINIO_USE_SSL", "false") == "true",
+		KafkaBrokers:        parseBrokers(getEnv("KAFKA_BROKERS", "localhost:9092")),
 	}
 }
 
@@ -37,4 +42,16 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func parseBrokers(s string) []string {
+	brokers := strings.Split(s, ",")
+	result := make([]string, 0, len(brokers))
+	for _, b := range brokers {
+		b = strings.TrimSpace(b)
+		if b != "" {
+			result = append(result, b)
+		}
+	}
+	return result
 }

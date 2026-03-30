@@ -12,11 +12,12 @@ import (
 )
 
 type Handler struct {
-	store *Store
+	store   *Store
+	service *Service
 }
 
-func NewHandler(store *Store) *Handler {
-	return &Handler{store: store}
+func NewHandler(store *Store, service *Service) *Handler {
+	return &Handler{store: store, service: service}
 }
 
 // ListConversations godoc
@@ -50,7 +51,7 @@ func (h *Handler) ListConversations(w http.ResponseWriter, r *http.Request) {
 
 // GetMessages godoc
 // @Summary Get messages
-// @Description Returns messages for a conversation with pagination
+// @Description Returns messages for a conversation with pagination. Supports all message types: text, system, document, modal.
 // @Tags chat
 // @Security BearerAuth
 // @Produce json
@@ -68,7 +69,6 @@ func (h *Handler) GetMessages(w http.ResponseWriter, r *http.Request) {
 
 	conversationID := chi.URLParam(r, "id")
 
-	// Verify the user is a participant
 	conv, err := h.store.GetConversation(conversationID)
 	if err != nil {
 		http.Error(w, `{"error":"conversation not found"}`, http.StatusNotFound)
@@ -113,8 +113,8 @@ type sendMessageRequest struct {
 }
 
 // SendMessage godoc
-// @Summary Send a message
-// @Description Sends a message in a conversation
+// @Summary Send a text message
+// @Description Sends a text message in a conversation
 // @Tags chat
 // @Security BearerAuth
 // @Accept json
@@ -155,8 +155,109 @@ func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(msg)
 }
 
+// ─── Send Document ──────────────────────────────────────────────────
+
+type sendDocumentRequest struct {
+	ConversationID string `json:"conversation_id"`
+	Content        string `json:"content"`       // описание
+	DocumentURL    string `json:"document_url"`  // ссылка на файл
+	DocumentName   string `json:"document_name"` // имя файла
+	OrderID        string `json:"order_id"`      // привязка к ордеру
+}
+
+// SendDocument godoc
+// @Summary Send a document in chat
+// @Description Sends a document (agreement PDF, etc.) in a conversation
+// @Tags chat
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param body body sendDocumentRequest true "Document details"
+// @Success 200 {object} Message
+// @Router /conversations/documents [post]
+func (h *Handler) SendDocument(w http.ResponseWriter, r *http.Request) {
+	id := mw.GetUserID(r.Context())
+	if id == "" {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	var req sendDocumentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+
+	conv, err := h.store.GetConversation(req.ConversationID)
+	if err != nil {
+		http.Error(w, `{"error":"conversation not found"}`, http.StatusNotFound)
+		return
+	}
+	if conv.LandlordID != id && conv.LoanerID != id {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+
+	msg, err := h.service.SendDocumentMessage(conv.ID, req.Content, req.DocumentURL, req.DocumentName, req.OrderID)
+	if err != nil {
+		http.Error(w, `{"error":"failed to send document"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(msg)
+}
+
+// ─── Respond to Modal ───────────────────────────────────────────────
+
+type modalResponseRequest struct {
+	MessageID string `json:"message_id"` // ID сообщения с модалкой
+	Action    string `json:"action"`     // "accepted" или "rejected"
+}
+
+// RespondToModal godoc
+// @Summary Respond to a modal (accept/reject)
+// @Description Responds to a modal message (agreement creation, signing, deposit confirmation)
+// @Tags chat
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param body body modalResponseRequest true "Modal response"
+// @Success 200 {object} map[string]string
+// @Failure 400 {object} map[string]string
+// @Router /conversations/modals/respond [post]
+func (h *Handler) RespondToModal(w http.ResponseWriter, r *http.Request) {
+	id := mw.GetUserID(r.Context())
+	if id == "" {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	var req modalResponseRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+
+	if req.Action != ModalStatusAccepted && req.Action != ModalStatusRejected {
+		http.Error(w, `{"error":"action must be 'accepted' or 'rejected'"}`, http.StatusBadRequest)
+		return
+	}
+
+	if err := h.service.RespondToModal(req.MessageID, req.Action); err != nil {
+		http.Error(w, `{"error":"failed to update modal"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"status":     "ok",
+		"message_id": req.MessageID,
+		"action":     req.Action,
+	})
+}
+
 // SeedChat creates a mock conversation for dev/testing.
-// The authenticated user becomes the loaner, a fake landlord is created.
 func (h *Handler) SeedChat(w http.ResponseWriter, r *http.Request) {
 	id := mw.GetUserID(r.Context())
 	if id == "" {

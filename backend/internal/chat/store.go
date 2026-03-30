@@ -2,6 +2,7 @@ package chat
 
 import (
 	"database/sql"
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -32,12 +33,23 @@ func (s *Store) Migrate() error {
 			conversation_id TEXT NOT NULL REFERENCES conversations(id),
 			sender_id TEXT NOT NULL,
 			content TEXT NOT NULL,
+			message_type TEXT NOT NULL DEFAULT 'text',
+			metadata JSONB,
 			created_at TIMESTAMP NOT NULL DEFAULT NOW()
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_messages_conversation_created
 			ON messages(conversation_id, created_at DESC)`,
 		`CREATE INDEX IF NOT EXISTS idx_conversations_users
 			ON conversations(landlord_id, loaner_id)`,
+		// Add columns to existing tables (idempotent)
+		`DO $$ BEGIN
+			ALTER TABLE messages ADD COLUMN IF NOT EXISTS message_type TEXT NOT NULL DEFAULT 'text';
+		EXCEPTION WHEN duplicate_column THEN NULL;
+		END $$`,
+		`DO $$ BEGIN
+			ALTER TABLE messages ADD COLUMN IF NOT EXISTS metadata JSONB;
+		EXCEPTION WHEN duplicate_column THEN NULL;
+		END $$`,
 	}
 	for _, q := range queries {
 		if _, err := s.db.Exec(q); err != nil {
@@ -105,19 +117,36 @@ func (s *Store) ListConversations(userID string) ([]Conversation, error) {
 	return convs, nil
 }
 
+// SaveMessage saves a regular text message.
 func (s *Store) SaveMessage(conversationID, senderID, content string) (*Message, error) {
+	return s.SaveTypedMessage(conversationID, senderID, content, MessageTypeText, nil)
+}
+
+// SaveTypedMessage saves a message with a specific type and optional metadata.
+func (s *Store) SaveTypedMessage(conversationID, senderID, content, messageType string, meta *MessageMeta) (*Message, error) {
 	msg := &Message{
 		ID:             uuid.New().String(),
 		ConversationID: conversationID,
 		SenderID:       senderID,
 		Content:        content,
+		MessageType:    messageType,
+		Metadata:       meta,
 		CreatedAt:      time.Now(),
 	}
 
+	var metaJSON []byte
+	if meta != nil {
+		var err error
+		metaJSON, err = json.Marshal(meta)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	_, err := s.db.Exec(
-		`INSERT INTO messages (id, conversation_id, sender_id, content, created_at)
-		 VALUES ($1, $2, $3, $4, $5)`,
-		msg.ID, msg.ConversationID, msg.SenderID, msg.Content, msg.CreatedAt,
+		`INSERT INTO messages (id, conversation_id, sender_id, content, message_type, metadata, created_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+		msg.ID, msg.ConversationID, msg.SenderID, msg.Content, msg.MessageType, metaJSON, msg.CreatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -140,7 +169,7 @@ func (s *Store) GetMessages(conversationID string, before *time.Time, limit int)
 
 	if before != nil {
 		rows, err = s.db.Query(
-			`SELECT id, conversation_id, sender_id, content, created_at
+			`SELECT id, conversation_id, sender_id, content, message_type, metadata, created_at
 			 FROM messages
 			 WHERE conversation_id = $1 AND created_at < $2
 			 ORDER BY created_at DESC LIMIT $3`,
@@ -148,7 +177,7 @@ func (s *Store) GetMessages(conversationID string, before *time.Time, limit int)
 		)
 	} else {
 		rows, err = s.db.Query(
-			`SELECT id, conversation_id, sender_id, content, created_at
+			`SELECT id, conversation_id, sender_id, content, message_type, metadata, created_at
 			 FROM messages
 			 WHERE conversation_id = $1
 			 ORDER BY created_at DESC LIMIT $2`,
@@ -163,8 +192,15 @@ func (s *Store) GetMessages(conversationID string, before *time.Time, limit int)
 	var msgs []Message
 	for rows.Next() {
 		var m Message
-		if err := rows.Scan(&m.ID, &m.ConversationID, &m.SenderID, &m.Content, &m.CreatedAt); err != nil {
+		var metaJSON sql.NullString
+		if err := rows.Scan(&m.ID, &m.ConversationID, &m.SenderID, &m.Content, &m.MessageType, &metaJSON, &m.CreatedAt); err != nil {
 			return nil, err
+		}
+		if metaJSON.Valid && metaJSON.String != "" {
+			var meta MessageMeta
+			if err := json.Unmarshal([]byte(metaJSON.String), &meta); err == nil {
+				m.Metadata = &meta
+			}
 		}
 		msgs = append(msgs, m)
 	}
@@ -188,4 +224,47 @@ func (s *Store) GetConversation(id string) (*Conversation, error) {
 		return nil, err
 	}
 	return conv, nil
+}
+
+// FindConversationByPropertyAndUsers finds a conversation by property and participants.
+func (s *Store) FindConversationByPropertyAndUsers(propertyID, landlordID, loanerID string) (*Conversation, error) {
+	conv := &Conversation{}
+	err := s.db.QueryRow(
+		`SELECT id, property_id, landlord_id, loaner_id, last_message, last_message_at, created_at
+		 FROM conversations
+		 WHERE property_id = $1 AND (landlord_id = $2 OR loaner_id = $3)
+		 LIMIT 1`,
+		propertyID, landlordID, loanerID,
+	).Scan(&conv.ID, &conv.PropertyID, &conv.LandlordID, &conv.LoanerID,
+		&conv.LastMessage, &conv.LastMessageAt, &conv.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return conv, nil
+}
+
+// UpdateModalStatus updates the modal_status in a message's metadata.
+func (s *Store) UpdateModalStatus(messageID, newStatus string) error {
+	// Read current metadata
+	var metaJSON sql.NullString
+	err := s.db.QueryRow(`SELECT metadata FROM messages WHERE id = $1`, messageID).Scan(&metaJSON)
+	if err != nil {
+		return err
+	}
+
+	var meta MessageMeta
+	if metaJSON.Valid && metaJSON.String != "" {
+		if err := json.Unmarshal([]byte(metaJSON.String), &meta); err != nil {
+			return err
+		}
+	}
+
+	meta.ModalStatus = newStatus
+	updated, err := json.Marshal(meta)
+	if err != nil {
+		return err
+	}
+
+	_, err = s.db.Exec(`UPDATE messages SET metadata = $1 WHERE id = $2`, updated, messageID)
+	return err
 }

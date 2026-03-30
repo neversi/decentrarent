@@ -1,9 +1,12 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"log"
 	"net/http"
+	"os/signal"
+	"syscall"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -16,7 +19,9 @@ import (
 	"github.com/abdro/decentrarent/backend/internal/chat"
 	"github.com/abdro/decentrarent/backend/internal/config"
 	"github.com/abdro/decentrarent/backend/internal/egov"
+	kafkapkg "github.com/abdro/decentrarent/backend/internal/kafka"
 	"github.com/abdro/decentrarent/backend/internal/media"
+	"github.com/abdro/decentrarent/backend/internal/order"
 	"github.com/abdro/decentrarent/backend/internal/property"
 	"github.com/abdro/decentrarent/backend/internal/user"
 )
@@ -33,6 +38,9 @@ import (
 func main() {
 	cfg := config.Load()
 
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
 	db, err := sql.Open("postgres", cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
@@ -44,7 +52,22 @@ func main() {
 	}
 	log.Println("Connected to database")
 
-	// Stores
+	// ─── Kafka producer ─────────────────────────────────────────────
+	kafkaProducer, err := kafkapkg.NewProducer(cfg.KafkaBrokers)
+	if err != nil {
+		log.Printf("Warning: Kafka producer not available: %v", err)
+	} else {
+		defer kafkaProducer.Close()
+		log.Println("Kafka producer connected")
+	}
+
+	if err := kafkapkg.EnsureTopics(cfg.KafkaBrokers, kafkapkg.AllTopics()); err != nil {
+		log.Printf("Warning: failed to ensure Kafka topics: %v", err)
+	} else {
+		log.Println("Kafka topics ensured")
+	}
+
+	// ─── Stores ─────────────────────────────────────────────────────
 	userStore := user.NewStore(db)
 	if err := userStore.Migrate(); err != nil {
 		log.Fatalf("Failed to run user migrations: %v", err)
@@ -65,6 +88,11 @@ func main() {
 		log.Fatalf("Failed to run media migrations: %v", err)
 	}
 
+	orderStore := order.NewStore(db)
+	if err := orderStore.Migrate(); err != nil {
+		log.Fatalf("Failed to run order migrations: %v", err)
+	}
+
 	// S3 client
 	s3Client, err := media.NewS3Client(cfg.MinioEndpoint, cfg.MinioPublicEndpoint, cfg.MinioAccessKey, cfg.MinioSecretKey, cfg.MinioBucket, cfg.MinioUseSSL)
 	if err != nil {
@@ -72,21 +100,33 @@ func main() {
 	}
 	log.Println("Connected to MinIO")
 
-	// Services
+	// ─── Services ───────────────────────────────────────────────────
 	authService := auth.NewService(cfg.JWTSecret)
-	chatService := chat.NewService(chatStore)
+	centrifugoClient := chat.NewCentrifugoClient(cfg.CentrifugoURL, cfg.CentrifugoKey)
+	chatService := chat.NewService(chatStore, centrifugoClient)
 	verifier := egov.NewMockVerifier()
 	propertyService := property.NewService(propertyStore, verifier)
+	orderService := order.NewService(orderStore, kafkaProducer)
 
-	// Handlers
+	// ─── Kafka consumers ────────────────────────────────────────────
+	chatConsumers, err := chat.NewChatConsumers(cfg.KafkaBrokers, chatService)
+	if err != nil {
+		log.Printf("Warning: Kafka consumers not available: %v", err)
+	} else {
+		defer chatConsumers.Close()
+		chatConsumers.Start(ctx)
+	}
+
+	// ─── Handlers ───────────────────────────────────────────────────
 	authHandler := auth.NewHandler(authService, userStore)
 	userHandler := user.NewHandler(userStore)
-	chatHandler := chat.NewHandler(chatStore)
+	chatHandler := chat.NewHandler(chatStore, chatService)
 	centrifugoHandler := chat.NewCentrifugoHandler(authService, chatService)
 	mediaHandler := media.NewHandler(mediaStore, s3Client, propertyStore)
 	propertyHandler := property.NewHandler(propertyStore, propertyService, mediaHandler, mediaHandler)
+	orderHandler := order.NewHandler(orderStore, orderService)
 
-	// Router
+	// ─── Router ─────────────────────────────────────────────────────
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
@@ -132,6 +172,8 @@ func main() {
 		r.Get("/conversations", chatHandler.ListConversations)
 		r.Get("/conversations/{id}/messages", chatHandler.GetMessages)
 		r.Post("/conversations/messages", chatHandler.SendMessage)
+		r.Post("/conversations/documents", chatHandler.SendDocument)
+		r.Post("/conversations/modals/respond", chatHandler.RespondToModal)
 		r.Post("/dev/seed-chat", chatHandler.SeedChat)
 
 		// Properties (owner actions)
@@ -145,6 +187,18 @@ func main() {
 		r.Post("/properties/{id}/media", mediaHandler.Register)
 		r.Delete("/properties/{id}/media/{mediaId}", mediaHandler.Delete)
 		r.Put("/properties/{id}/media/order", mediaHandler.Reorder)
+
+		// Orders (escrow)
+		r.Post("/orders", orderHandler.Create)
+		r.Get("/orders", orderHandler.List)
+		r.Get("/orders/{id}", orderHandler.Get)
+		r.Post("/orders/{id}/sign", orderHandler.Sign)
+		r.Post("/orders/{id}/settle", orderHandler.Settle)
+		r.Post("/orders/{id}/dispute", orderHandler.OpenDispute)
+		r.Post("/orders/{id}/resolve", orderHandler.ResolveDispute)
+		r.Post("/orders/{id}/pay-rent", orderHandler.PayRent)
+		r.Get("/orders/{id}/payments", orderHandler.GetPayments)
+		r.Get("/orders/{id}/history", orderHandler.GetHistory)
 	})
 
 	log.Printf("Server starting on :%s", cfg.ServerPort)
