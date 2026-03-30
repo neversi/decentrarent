@@ -6,7 +6,7 @@ use error::EscrowError;
 mod error;
 mod models;
 
-declare_id!("6pbgJgKEzw4XigAzvfoR4zEts3arXCyYuF4J5pzgnzuh");
+declare_id!("GNAZzNcftcRNMtjETiXupfpUqPmwQyhNCrTJeiZFkpWY");
 
 #[program]
 pub mod lease {

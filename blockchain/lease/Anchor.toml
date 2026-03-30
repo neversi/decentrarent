@@ -9,7 +9,7 @@ skip-lint = false
 lease = "6pbgJgKEzw4XigAzvfoR4zEts3arXCyYuF4J5pzgnzuh"
 
 [programs.devnet]
-lease = "6pbgJgKEzw4XigAzvfoR4zEts3arXCyYuF4J5pzgnzuh"
+lease = "GNAZzNcftcRNMtjETiXupfpUqPmwQyhNCrTJeiZFkpWY"
 
 [registry]
 url = "https://api.apr.dev"
