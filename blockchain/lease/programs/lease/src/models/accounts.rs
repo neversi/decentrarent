@@ -1,7 +1,8 @@
-use anchor_lang::prelude::*;
 use crate::{EscrowError, EscrowStatus};
+use anchor_lang::prelude::*;
 
 #[derive(Accounts)]
+#[instruction(order_id: [u8; 16])]
 pub struct LockDeposit<'info> {
     #[account(mut)]
     pub tenant: Signer<'info>,
@@ -16,7 +17,7 @@ pub struct LockDeposit<'info> {
         init,
         payer = tenant,
         space = EscrowAccount::SIZE,
-        seeds = [b"escrow", landlord.key().as_ref(), tenant.key().as_ref()],
+        seeds = [b"escrow", landlord.key().as_ref(), tenant.key().as_ref(), order_id.as_ref()],
         bump
     )]
     pub escrow: Account<'info, EscrowAccount>,
@@ -31,7 +32,7 @@ pub struct LandlordSign<'info> {
 
     #[account(
         mut,
-        seeds = [b"escrow", landlord.key().as_ref(), escrow.tenant.as_ref()],
+        seeds = [b"escrow", landlord.key().as_ref(), escrow.tenant.as_ref(), escrow.order_id.as_ref()],
         bump = escrow.bump,
         constraint = escrow.landlord == landlord.key() @ EscrowError::Unauthorized,
     )]
@@ -45,7 +46,7 @@ pub struct TenantSign<'info> {
 
     #[account(
         mut,
-        seeds = [b"escrow", escrow.landlord.as_ref(), tenant.key().as_ref()],
+        seeds = [b"escrow", escrow.landlord.as_ref(), tenant.key().as_ref(), escrow.order_id.as_ref()],
         bump = escrow.bump,
         constraint = escrow.tenant == tenant.key() @ EscrowError::Unauthorized,
     )]
@@ -69,7 +70,7 @@ pub struct PayRent<'info> {
 
     #[account(
         mut,
-        seeds = [b"escrow", escrow.landlord.as_ref(), tenant.key().as_ref()],
+        seeds = [b"escrow", escrow.landlord.as_ref(), tenant.key().as_ref(), escrow.order_id.as_ref()],
         bump = escrow.bump,
     )]
     pub escrow: Account<'info, EscrowAccount>,
@@ -95,7 +96,7 @@ pub struct ReleaseDeposit<'info> {
 
     #[account(
         mut,
-        seeds = [b"escrow", escrow.landlord.as_ref(), escrow.tenant.as_ref()],
+        seeds = [b"escrow", escrow.landlord.as_ref(), escrow.tenant.as_ref(), escrow.order_id.as_ref()],
         bump = escrow.bump,
     )]
     pub escrow: Account<'info, EscrowAccount>,
@@ -111,7 +112,7 @@ pub struct AuthorityOnly<'info> {
 
     #[account(
         mut,
-        seeds = [b"escrow", escrow.landlord.as_ref(), escrow.tenant.as_ref()],
+        seeds = [b"escrow", escrow.landlord.as_ref(), escrow.tenant.as_ref(), escrow.order_id.as_ref()],
         bump = escrow.bump,
     )]
     pub escrow: Account<'info, EscrowAccount>,
@@ -131,7 +132,7 @@ pub struct ExpireEscrow<'info> {
 
     #[account(
         mut,
-        seeds = [b"escrow", escrow.landlord.as_ref(), escrow.tenant.as_ref()],
+        seeds = [b"escrow", escrow.landlord.as_ref(), escrow.tenant.as_ref(), escrow.order_id.as_ref()],
         bump = escrow.bump,
     )]
     pub escrow: Account<'info, EscrowAccount>,
@@ -139,6 +140,7 @@ pub struct ExpireEscrow<'info> {
 
 #[account]
 pub struct EscrowAccount {
+    pub order_id: [u8; 16],
     pub landlord: Pubkey,
     pub tenant: Pubkey,
     pub authority: Pubkey,
@@ -153,5 +155,5 @@ pub struct EscrowAccount {
 }
 
 impl EscrowAccount {
-    pub const SIZE: usize = 8 + 32 + 32 + 32 + 8 + 8 + 1 + 8 + 8 + 1 + 1 + 1 + 32;
+    pub const SIZE: usize = 8 + 16 + 32 + 32 + 32 + 8 + 8 + 1 + 8 + 8 + 1 + 1 + 1 + 32;
 }

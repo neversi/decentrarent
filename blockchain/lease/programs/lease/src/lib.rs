@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_lang::system_program;
-use models::*;
 use error::EscrowError;
+use models::*;
 
 mod error;
 mod models;
@@ -16,6 +16,7 @@ pub mod lease {
     /// Арендатор переводит только депозит аренда платится отдельно через pay_rent
     pub fn lock_deposit(
         ctx: Context<LockDeposit>,
+        order_id: [u8; 16],
         deposit_amount: u64,
         deadline_ts: i64,
     ) -> Result<()> {
@@ -28,6 +29,7 @@ pub mod lease {
 
         let escrow_info = ctx.accounts.escrow.to_account_info();
         let escrow = &mut ctx.accounts.escrow;
+        escrow.order_id = order_id;
         escrow.landlord = ctx.accounts.landlord.key();
         escrow.tenant = ctx.accounts.tenant.key();
         escrow.authority = ctx.accounts.authority.key();
@@ -81,6 +83,10 @@ pub mod lease {
         escrow.landlord_signed = true;
         if escrow.tenant_signed {
             escrow.status = EscrowStatus::Active;
+            emit!(DocumentSigned {
+                escrow: escrow.key(),
+                order_id: escrow.order_id,
+            });
         }
 
         emit!(PartySignedEvent {
@@ -112,6 +118,10 @@ pub mod lease {
         escrow.tenant_signed = true;
         if escrow.landlord_signed {
             escrow.status = EscrowStatus::Active;
+            emit!(DocumentSigned {
+                escrow: escrow.key(),
+                order_id: escrow.order_id,
+            });
         }
 
         emit!(PartySignedEvent {
@@ -267,7 +277,7 @@ pub mod lease {
             amount: deposit,
             reason,
         });
-        msg!("Escrow expired. Deposit {} lamports refunded", deposit);
+        msg!("Dispute resolved for landlord: {} lamports paid", deposit);
 
         Ok(())
     }

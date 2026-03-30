@@ -1,7 +1,7 @@
-pub mod event;
 pub mod accounts;
+pub mod event;
 pub mod status;
 
-pub use event::*;
 pub use accounts::*;
+pub use event::*;
 pub use status::*;

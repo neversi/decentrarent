@@ -9,7 +9,7 @@ describe("lease", () => {
   const program = anchor.workspace.lease as Program<Lease>;
 
   it("Is initialized!", async () => {
-    // Add your test here.
+    // Add your tests here.
     const tx = await program.methods.initialize().rpc();
     console.log("Your transaction signature", tx);
   });

@@ -46,3 +46,9 @@ pub struct DisputeOpened {
     pub escrow: Pubkey,
     pub reason: String,
 }
+
+#[event]
+pub struct DocumentSigned {
+    pub escrow: Pubkey,
+    pub order_id: [u8; 16],
+}
