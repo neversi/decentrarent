@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"log"
 	"net/http"
 	"os/signal"
@@ -106,7 +108,8 @@ func main() {
 	chatService := chat.NewService(chatStore, centrifugoClient)
 	verifier := egov.NewMockVerifier()
 	propertyService := property.NewService(propertyStore, verifier)
-	orderService := order.NewService(orderStore, kafkaProducer)
+	orderCentrifugo := &orderCentrifugoAdapter{apiURL: cfg.CentrifugoURL, apiKey: cfg.CentrifugoKey}
+	orderService := order.NewService(orderStore, kafkaProducer, orderCentrifugo)
 
 	// ─── Kafka consumers ────────────────────────────────────────────
 	chatConsumers, err := chat.NewChatConsumers(cfg.KafkaBrokers, chatService)
@@ -115,6 +118,15 @@ func main() {
 	} else {
 		defer chatConsumers.Close()
 		chatConsumers.Start(ctx)
+	}
+
+	// ─── Order Kafka consumers (Solana events) ─────────────────────
+	orderConsumers, err := order.NewOrderConsumers(cfg.KafkaBrokers, orderService)
+	if err != nil {
+		log.Printf("Warning: Order Kafka consumers not available: %v", err)
+	} else {
+		defer orderConsumers.Close()
+		orderConsumers.Start(ctx)
 	}
 
 	// ─── Handlers ───────────────────────────────────────────────────
@@ -193,6 +205,8 @@ func main() {
 		r.Post("/orders", orderHandler.Create)
 		r.Get("/orders", orderHandler.List)
 		r.Get("/orders/{id}", orderHandler.Get)
+		r.Post("/orders/{id}/accept", orderHandler.Accept)
+		r.Post("/orders/{id}/reject", orderHandler.Reject)
 		r.Post("/orders/{id}/sign", orderHandler.Sign)
 		r.Post("/orders/{id}/settle", orderHandler.Settle)
 		r.Post("/orders/{id}/dispute", orderHandler.OpenDispute)
@@ -204,4 +218,42 @@ func main() {
 
 	log.Printf("Server starting on :%s", cfg.ServerPort)
 	log.Fatal(http.ListenAndServe(":"+cfg.ServerPort, r))
+}
+
+// orderCentrifugoAdapter implements order.CentrifugoPublisher using the Centrifugo HTTP API.
+type orderCentrifugoAdapter struct {
+	apiURL string
+	apiKey string
+}
+
+func (a *orderCentrifugoAdapter) PublishJSON(channel string, data interface{}) error {
+	innerData, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+
+	payload, err := json.Marshal(map[string]interface{}{
+		"method": "publish",
+		"params": map[string]interface{}{
+			"channel": channel,
+			"data":    json.RawMessage(innerData),
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("POST", a.apiURL+"/api", bytes.NewReader(payload))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "apikey "+a.apiKey)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	return nil
 }

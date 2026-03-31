@@ -24,8 +24,8 @@ func (s *Store) Migrate() error {
 		`CREATE TABLE IF NOT EXISTS orders (
 			id                TEXT PRIMARY KEY,
 			property_id       TEXT NOT NULL REFERENCES properties(id),
-			tenant_wallet     TEXT NOT NULL REFERENCES users(id),
-			landlord_wallet   TEXT NOT NULL REFERENCES users(id),
+			tenant_id         TEXT NOT NULL REFERENCES users(id),
+			landlord_id       TEXT NOT NULL REFERENCES users(id),
 			deposit_amount    BIGINT NOT NULL DEFAULT 0,
 			rent_amount       BIGINT NOT NULL DEFAULT 0,
 			token_mint        TEXT NOT NULL DEFAULT 'SOL',
@@ -40,8 +40,8 @@ func (s *Store) Migrate() error {
 			created_at        TIMESTAMP NOT NULL DEFAULT NOW(),
 			updated_at        TIMESTAMP NOT NULL DEFAULT NOW()
 		)`,
-		`CREATE INDEX IF NOT EXISTS idx_orders_tenant ON orders(tenant_wallet)`,
-		`CREATE INDEX IF NOT EXISTS idx_orders_landlord ON orders(landlord_wallet)`,
+		`CREATE INDEX IF NOT EXISTS idx_orders_tenant ON orders(tenant_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_orders_landlord ON orders(landlord_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_orders_property ON orders(property_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(escrow_status)`,
 
@@ -68,11 +68,27 @@ func (s *Store) Migrate() error {
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_rent_payments_order ON rent_payments(order_id)`,
 	}
+
+	// Rename columns for existing databases (safe to fail if already renamed or table is new)
+	renames := []string{
+		`ALTER TABLE orders RENAME COLUMN tenant_wallet TO tenant_id`,
+		`ALTER TABLE orders RENAME COLUMN landlord_wallet TO landlord_id`,
+		`ALTER TABLE orders ADD COLUMN IF NOT EXISTS conversation_id TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE orders ADD COLUMN IF NOT EXISTS created_by TEXT NOT NULL DEFAULT ''`,
+		`CREATE INDEX IF NOT EXISTS idx_orders_conversation ON orders(conversation_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_orders_escrow_address ON orders(escrow_address)`,
+	}
+
 	for _, q := range queries {
 		if _, err := s.db.Exec(q); err != nil {
 			return err
 		}
 	}
+
+	for _, q := range renames {
+		s.db.Exec(q) // ignore errors — column may already be renamed or table is fresh
+	}
+
 	return nil
 }
 
@@ -80,7 +96,7 @@ func (s *Store) Migrate() error {
 
 func (s *Store) Create(o *Order) (*Order, error) {
 	o.ID = uuid.New().String()
-	o.EscrowStatus = StatusAwaitingSignatures
+	o.EscrowStatus = StatusNew
 	o.TenantSigned = false
 	o.LandlordSigned = false
 	o.CreatedAt = time.Now()
@@ -88,20 +104,21 @@ func (s *Store) Create(o *Order) (*Order, error) {
 
 	_, err := s.db.Exec(
 		`INSERT INTO orders
-			(id, property_id, tenant_wallet, landlord_wallet, deposit_amount, rent_amount,
-			 token_mint, escrow_status, escrow_address, tenant_signed, landlord_signed,
-			 sign_deadline, rent_start_date, rent_end_date, dispute_reason, created_at, updated_at)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
-		o.ID, o.PropertyID, o.TenantWallet, o.LandlordWallet, o.DepositAmount, o.RentAmount,
-		o.TokenMint, o.EscrowStatus, o.EscrowAddress, o.TenantSigned, o.LandlordSigned,
-		o.SignDeadline, o.RentStartDate, o.RentEndDate, o.DisputeReason, o.CreatedAt, o.UpdatedAt,
+			(id, conversation_id, property_id, tenant_id, landlord_id, created_by,
+			 deposit_amount, rent_amount, token_mint, escrow_status, escrow_address,
+			 tenant_signed, landlord_signed, sign_deadline, rent_start_date, rent_end_date,
+			 dispute_reason, created_at, updated_at)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
+		o.ID, o.ConversationID, o.PropertyID, o.TenantID, o.LandlordID, o.CreatedBy,
+		o.DepositAmount, o.RentAmount, o.TokenMint, o.EscrowStatus, o.EscrowAddress,
+		o.TenantSigned, o.LandlordSigned, o.SignDeadline, o.RentStartDate, o.RentEndDate,
+		o.DisputeReason, o.CreatedAt, o.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	// Записываем начальный статус в историю
-	s.addHistory(o.ID, "", StatusAwaitingSignatures, o.TenantWallet, "order created")
+	s.addHistory(o.ID, "", StatusNew, o.CreatedBy, "order created")
 
 	return o, nil
 }
@@ -111,14 +128,16 @@ func (s *Store) Create(o *Order) (*Order, error) {
 func (s *Store) GetByID(id string) (*Order, error) {
 	o := &Order{}
 	err := s.db.QueryRow(
-		`SELECT id, property_id, tenant_wallet, landlord_wallet, deposit_amount, rent_amount,
-		        token_mint, escrow_status, escrow_address, tenant_signed, landlord_signed,
-		        sign_deadline, rent_start_date, rent_end_date, dispute_reason, created_at, updated_at
+		`SELECT id, conversation_id, property_id, tenant_id, landlord_id, created_by,
+		        deposit_amount, rent_amount, token_mint, escrow_status, escrow_address,
+		        tenant_signed, landlord_signed, sign_deadline, rent_start_date, rent_end_date,
+		        dispute_reason, created_at, updated_at
 		 FROM orders WHERE id = $1`, id,
 	).Scan(
-		&o.ID, &o.PropertyID, &o.TenantWallet, &o.LandlordWallet, &o.DepositAmount, &o.RentAmount,
-		&o.TokenMint, &o.EscrowStatus, &o.EscrowAddress, &o.TenantSigned, &o.LandlordSigned,
-		&o.SignDeadline, &o.RentStartDate, &o.RentEndDate, &o.DisputeReason, &o.CreatedAt, &o.UpdatedAt,
+		&o.ID, &o.ConversationID, &o.PropertyID, &o.TenantID, &o.LandlordID, &o.CreatedBy,
+		&o.DepositAmount, &o.RentAmount, &o.TokenMint, &o.EscrowStatus, &o.EscrowAddress,
+		&o.TenantSigned, &o.LandlordSigned, &o.SignDeadline, &o.RentStartDate, &o.RentEndDate,
+		&o.DisputeReason, &o.CreatedAt, &o.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -129,26 +148,32 @@ func (s *Store) GetByID(id string) (*Order, error) {
 // ─── List ───────────────────────────────────────────────────────────
 
 func (s *Store) List(f *ListFilter) ([]Order, error) {
-	query := `SELECT id, property_id, tenant_wallet, landlord_wallet, deposit_amount, rent_amount,
-	                 token_mint, escrow_status, escrow_address, tenant_signed, landlord_signed,
-	                 sign_deadline, rent_start_date, rent_end_date, dispute_reason, created_at, updated_at
+	query := `SELECT id, conversation_id, property_id, tenant_id, landlord_id, created_by,
+	                 deposit_amount, rent_amount, token_mint, escrow_status, escrow_address,
+	                 tenant_signed, landlord_signed, sign_deadline, rent_start_date, rent_end_date,
+	                 dispute_reason, created_at, updated_at
 	          FROM orders WHERE 1=1`
 	args := []interface{}{}
 	argIdx := 1
 
-	if f.TenantWallet != "" {
-		query += fmt.Sprintf(" AND tenant_wallet = $%d", argIdx)
-		args = append(args, f.TenantWallet)
+	if f.TenantID != "" {
+		query += fmt.Sprintf(" AND tenant_id = $%d", argIdx)
+		args = append(args, f.TenantID)
 		argIdx++
 	}
-	if f.LandlordWallet != "" {
-		query += fmt.Sprintf(" AND landlord_wallet = $%d", argIdx)
-		args = append(args, f.LandlordWallet)
+	if f.LandlordID != "" {
+		query += fmt.Sprintf(" AND landlord_id = $%d", argIdx)
+		args = append(args, f.LandlordID)
 		argIdx++
 	}
 	if f.PropertyID != "" {
 		query += fmt.Sprintf(" AND property_id = $%d", argIdx)
 		args = append(args, f.PropertyID)
+		argIdx++
+	}
+	if f.ConversationID != "" {
+		query += fmt.Sprintf(" AND conversation_id = $%d", argIdx)
+		args = append(args, f.ConversationID)
 		argIdx++
 	}
 	if f.EscrowStatus != "" {
@@ -179,9 +204,10 @@ func (s *Store) List(f *ListFilter) ([]Order, error) {
 	for rows.Next() {
 		var o Order
 		if err := rows.Scan(
-			&o.ID, &o.PropertyID, &o.TenantWallet, &o.LandlordWallet, &o.DepositAmount, &o.RentAmount,
-			&o.TokenMint, &o.EscrowStatus, &o.EscrowAddress, &o.TenantSigned, &o.LandlordSigned,
-			&o.SignDeadline, &o.RentStartDate, &o.RentEndDate, &o.DisputeReason, &o.CreatedAt, &o.UpdatedAt,
+			&o.ID, &o.ConversationID, &o.PropertyID, &o.TenantID, &o.LandlordID, &o.CreatedBy,
+			&o.DepositAmount, &o.RentAmount, &o.TokenMint, &o.EscrowStatus, &o.EscrowAddress,
+			&o.TenantSigned, &o.LandlordSigned, &o.SignDeadline, &o.RentStartDate, &o.RentEndDate,
+			&o.DisputeReason, &o.CreatedAt, &o.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -190,18 +216,19 @@ func (s *Store) List(f *ListFilter) ([]Order, error) {
 	return orders, nil
 }
 
-// ─── ListByParticipant — orders где user является tenant ИЛИ landlord
+// ─── ListByParticipant — orders where user is tenant OR landlord
 
-func (s *Store) ListByParticipant(wallet string, limit, offset int) ([]Order, error) {
-	query := `SELECT id, property_id, tenant_wallet, landlord_wallet, deposit_amount, rent_amount,
-	                 token_mint, escrow_status, escrow_address, tenant_signed, landlord_signed,
-	                 sign_deadline, rent_start_date, rent_end_date, dispute_reason, created_at, updated_at
+func (s *Store) ListByParticipant(userID string, limit, offset int) ([]Order, error) {
+	query := `SELECT id, conversation_id, property_id, tenant_id, landlord_id, created_by,
+	                 deposit_amount, rent_amount, token_mint, escrow_status, escrow_address,
+	                 tenant_signed, landlord_signed, sign_deadline, rent_start_date, rent_end_date,
+	                 dispute_reason, created_at, updated_at
 	          FROM orders
-	          WHERE tenant_wallet = $1 OR landlord_wallet = $1
+	          WHERE tenant_id = $1 OR landlord_id = $1
 	          ORDER BY created_at DESC
 	          LIMIT $2 OFFSET $3`
 
-	rows, err := s.db.Query(query, wallet, limit, offset)
+	rows, err := s.db.Query(query, userID, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -211,15 +238,38 @@ func (s *Store) ListByParticipant(wallet string, limit, offset int) ([]Order, er
 	for rows.Next() {
 		var o Order
 		if err := rows.Scan(
-			&o.ID, &o.PropertyID, &o.TenantWallet, &o.LandlordWallet, &o.DepositAmount, &o.RentAmount,
-			&o.TokenMint, &o.EscrowStatus, &o.EscrowAddress, &o.TenantSigned, &o.LandlordSigned,
-			&o.SignDeadline, &o.RentStartDate, &o.RentEndDate, &o.DisputeReason, &o.CreatedAt, &o.UpdatedAt,
+			&o.ID, &o.ConversationID, &o.PropertyID, &o.TenantID, &o.LandlordID, &o.CreatedBy,
+			&o.DepositAmount, &o.RentAmount, &o.TokenMint, &o.EscrowStatus, &o.EscrowAddress,
+			&o.TenantSigned, &o.LandlordSigned, &o.SignDeadline, &o.RentStartDate, &o.RentEndDate,
+			&o.DisputeReason, &o.CreatedAt, &o.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
 		orders = append(orders, o)
 	}
 	return orders, nil
+}
+
+// ─── FindByEscrowAddress ───────────────────────────────────────────
+
+func (s *Store) FindByEscrowAddress(escrowAddress string) (*Order, error) {
+	o := &Order{}
+	err := s.db.QueryRow(
+		`SELECT id, conversation_id, property_id, tenant_id, landlord_id, created_by,
+		        deposit_amount, rent_amount, token_mint, escrow_status, escrow_address,
+		        tenant_signed, landlord_signed, sign_deadline, rent_start_date, rent_end_date,
+		        dispute_reason, created_at, updated_at
+		 FROM orders WHERE escrow_address = $1`, escrowAddress,
+	).Scan(
+		&o.ID, &o.ConversationID, &o.PropertyID, &o.TenantID, &o.LandlordID, &o.CreatedBy,
+		&o.DepositAmount, &o.RentAmount, &o.TokenMint, &o.EscrowStatus, &o.EscrowAddress,
+		&o.TenantSigned, &o.LandlordSigned, &o.SignDeadline, &o.RentStartDate, &o.RentEndDate,
+		&o.DisputeReason, &o.CreatedAt, &o.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return o, nil
 }
 
 // ─── UpdateStatus ───────────────────────────────────────────────────

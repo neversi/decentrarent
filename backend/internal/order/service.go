@@ -3,6 +3,8 @@ package order
 import (
 	"context"
 	"errors"
+	"fmt"
+	"log"
 	"time"
 
 	"github.com/google/uuid"
@@ -19,21 +21,27 @@ var (
 	ErrDeadlinePassed    = errors.New("sign deadline has passed")
 	ErrInvalidWinner     = errors.New("winner must be 'tenant' or 'landlord'")
 	ErrMissingFields     = errors.New("missing required fields")
+	ErrNotNewOrder       = errors.New("order is not in 'new' status")
 )
 
-type Service struct {
-	store    *Store
-	producer *kafka.Producer
+type CentrifugoPublisher interface {
+	PublishJSON(channel string, data interface{}) error
 }
 
-func NewService(store *Store, producer *kafka.Producer) *Service {
-	return &Service{store: store, producer: producer}
+type Service struct {
+	store      *Store
+	producer   *kafka.Producer
+	centrifugo CentrifugoPublisher
+}
+
+func NewService(store *Store, producer *kafka.Producer, centrifugo CentrifugoPublisher) *Service {
+	return &Service{store: store, producer: producer, centrifugo: centrifugo}
 }
 
 // ─── CreateOrder ────────────────────────────────────────────────────
 
-func (s *Service) CreateOrder(tenantWallet string, req *CreateOrderRequest) (*Order, error) {
-	if req.PropertyID == "" || req.LandlordWallet == "" || req.DepositAmount <= 0 || req.RentAmount <= 0 {
+func (s *Service) CreateOrder(callerID string, req *CreateOrderRequest) (*Order, error) {
+	if req.PropertyID == "" || req.LandlordID == "" || req.DepositAmount <= 0 || req.RentAmount <= 0 || req.ConversationID == "" {
 		return nil, ErrMissingFields
 	}
 
@@ -57,9 +65,11 @@ func (s *Service) CreateOrder(tenantWallet string, req *CreateOrderRequest) (*Or
 	}
 
 	o := &Order{
+		ConversationID: req.ConversationID,
 		PropertyID:     req.PropertyID,
-		TenantWallet:   tenantWallet,
-		LandlordWallet: req.LandlordWallet,
+		TenantID:       callerID,
+		LandlordID:     req.LandlordID,
+		CreatedBy:      callerID,
 		DepositAmount:  req.DepositAmount,
 		RentAmount:     req.RentAmount,
 		TokenMint:      tokenMint,
@@ -67,6 +77,7 @@ func (s *Service) CreateOrder(tenantWallet string, req *CreateOrderRequest) (*Or
 		SignDeadline:   time.Now().Add(time.Duration(deadlineDays) * 24 * time.Hour),
 		RentStartDate:  rentStart,
 		RentEndDate:    rentEnd,
+		EscrowStatus:   StatusNew,
 	}
 
 	created, err := s.store.Create(o)
@@ -75,12 +86,13 @@ func (s *Service) CreateOrder(tenantWallet string, req *CreateOrderRequest) (*Or
 	}
 
 	s.publishOrderEvent(kafka.TopicOrderCreated, created)
+	s.publishCentrifugoOrderUpdate(created, "order_created")
 	return created, nil
 }
 
 // ─── Sign ───────────────────────────────────────────────────────────
 
-func (s *Service) Sign(orderID, userWallet string) (*Order, error) {
+func (s *Service) Sign(orderID, userID string) (*Order, error) {
 	o, err := s.store.GetByID(orderID)
 	if err != nil {
 		return nil, ErrOrderNotFound
@@ -91,14 +103,14 @@ func (s *Service) Sign(orderID, userWallet string) (*Order, error) {
 	}
 
 	if time.Now().After(o.SignDeadline) {
-		s.store.UpdateStatus(o.ID, StatusExpired, userWallet, "sign deadline passed")
+		s.store.UpdateStatus(o.ID, StatusExpired, userID, "sign deadline passed")
 		s.publishOrderEvent(kafka.TopicOrderExpired, o)
 		return nil, ErrDeadlinePassed
 	}
 
 	role := ""
-	switch userWallet {
-	case o.TenantWallet:
+	switch userID {
+	case o.TenantID:
 		if o.TenantSigned {
 			return nil, ErrAlreadySigned
 		}
@@ -107,7 +119,7 @@ func (s *Service) Sign(orderID, userWallet string) (*Order, error) {
 		}
 		o.TenantSigned = true
 		role = "tenant"
-	case o.LandlordWallet:
+	case o.LandlordID:
 		if o.LandlordSigned {
 			return nil, ErrAlreadySigned
 		}
@@ -126,17 +138,17 @@ func (s *Service) Sign(orderID, userWallet string) (*Order, error) {
 		EventID:        uuid.New().String(),
 		OrderID:        o.ID,
 		PropertyID:     o.PropertyID,
-		TenantWallet:   o.TenantWallet,
-		LandlordWallet: o.LandlordWallet,
-		SignedBy:        userWallet,
-		Role:            role,
-		BothSigned:      bothSigned,
-		Timestamp:       time.Now(),
+		TenantWallet:   o.TenantID,
+		LandlordWallet: o.LandlordID,
+		SignedBy:       userID,
+		Role:           role,
+		BothSigned:     bothSigned,
+		Timestamp:      time.Now(),
 	}
 	s.producer.Publish(context.Background(), kafka.TopicOrderSigned, o.ID, evt)
 
 	if bothSigned {
-		if err := s.store.UpdateStatus(o.ID, StatusActive, userWallet, "both parties signed"); err != nil {
+		if err := s.store.UpdateStatus(o.ID, StatusActive, userID, "both parties signed"); err != nil {
 			return nil, err
 		}
 		o.EscrowStatus = StatusActive
@@ -148,7 +160,7 @@ func (s *Service) Sign(orderID, userWallet string) (*Order, error) {
 
 // ─── Settle ─────────────────────────────────────────────────────────
 
-func (s *Service) Settle(orderID, userWallet string) (*Order, error) {
+func (s *Service) Settle(orderID, userID string) (*Order, error) {
 	o, err := s.store.GetByID(orderID)
 	if err != nil {
 		return nil, ErrOrderNotFound
@@ -158,11 +170,11 @@ func (s *Service) Settle(orderID, userWallet string) (*Order, error) {
 		return nil, ErrInvalidTransition
 	}
 
-	if userWallet != o.LandlordWallet {
+	if userID != o.LandlordID {
 		return nil, ErrForbidden
 	}
 
-	if err := s.store.UpdateStatus(o.ID, StatusSettled, userWallet, "landlord settled escrow"); err != nil {
+	if err := s.store.UpdateStatus(o.ID, StatusSettled, userID, "landlord settled escrow"); err != nil {
 		return nil, err
 	}
 	o.EscrowStatus = StatusSettled
@@ -173,7 +185,7 @@ func (s *Service) Settle(orderID, userWallet string) (*Order, error) {
 
 // ─── OpenDispute ────────────────────────────────────────────────────
 
-func (s *Service) OpenDispute(orderID, userWallet, reason string) (*Order, error) {
+func (s *Service) OpenDispute(orderID, userID, reason string) (*Order, error) {
 	o, err := s.store.GetByID(orderID)
 	if err != nil {
 		return nil, ErrOrderNotFound
@@ -183,7 +195,7 @@ func (s *Service) OpenDispute(orderID, userWallet, reason string) (*Order, error
 		return nil, ErrInvalidTransition
 	}
 
-	if userWallet != o.TenantWallet && userWallet != o.LandlordWallet {
+	if userID != o.TenantID && userID != o.LandlordID {
 		return nil, ErrForbidden
 	}
 
@@ -191,7 +203,7 @@ func (s *Service) OpenDispute(orderID, userWallet, reason string) (*Order, error
 		return nil, err
 	}
 
-	if err := s.store.UpdateStatus(o.ID, StatusDisputed, userWallet, reason); err != nil {
+	if err := s.store.UpdateStatus(o.ID, StatusDisputed, userID, reason); err != nil {
 		return nil, err
 	}
 
@@ -202,9 +214,9 @@ func (s *Service) OpenDispute(orderID, userWallet, reason string) (*Order, error
 		EventID:        uuid.New().String(),
 		OrderID:        o.ID,
 		PropertyID:     o.PropertyID,
-		TenantWallet:   o.TenantWallet,
-		LandlordWallet: o.LandlordWallet,
-		OpenedBy:       userWallet,
+		TenantWallet:   o.TenantID,
+		LandlordWallet: o.LandlordID,
+		OpenedBy:       userID,
 		Reason:         reason,
 		Timestamp:      time.Now(),
 	}
@@ -245,8 +257,8 @@ func (s *Service) ResolveDispute(orderID, resolverID, winner, reason string) (*O
 		EventID:        uuid.New().String(),
 		OrderID:        o.ID,
 		PropertyID:     o.PropertyID,
-		TenantWallet:   o.TenantWallet,
-		LandlordWallet: o.LandlordWallet,
+		TenantWallet:   o.TenantID,
+		LandlordWallet: o.LandlordID,
 		Winner:         winner,
 		Reason:         reason,
 		Timestamp:      time.Now(),
@@ -284,7 +296,7 @@ func (s *Service) ExpireOrder(orderID, callerID string) (*Order, error) {
 
 // ─── PayRent ────────────────────────────────────────────────────────
 
-func (s *Service) PayRent(orderID, userWallet string, req *PayRentRequest) (*RentPayment, error) {
+func (s *Service) PayRent(orderID, userID string, req *PayRentRequest) (*RentPayment, error) {
 	o, err := s.store.GetByID(orderID)
 	if err != nil {
 		return nil, ErrOrderNotFound
@@ -294,7 +306,7 @@ func (s *Service) PayRent(orderID, userWallet string, req *PayRentRequest) (*Ren
 		return nil, ErrNotActive
 	}
 
-	if userWallet != o.TenantWallet {
+	if userID != o.TenantID {
 		return nil, ErrForbidden
 	}
 
@@ -309,7 +321,7 @@ func (s *Service) PayRent(orderID, userWallet string, req *PayRentRequest) (*Ren
 
 	payment := &RentPayment{
 		OrderID:     orderID,
-		PaidBy:      userWallet,
+		PaidBy:      userID,
 		Amount:      o.RentAmount,
 		TxHash:      req.TxHash,
 		PeriodStart: periodStart,
@@ -324,7 +336,7 @@ func (s *Service) PayRent(orderID, userWallet string, req *PayRentRequest) (*Ren
 	evt := kafka.RentPaidEvent{
 		EventID:     uuid.New().String(),
 		OrderID:     orderID,
-		PaidBy:      userWallet,
+		PaidBy:      userID,
 		Amount:      o.RentAmount,
 		TxHash:      req.TxHash,
 		PeriodStart: periodStart,
@@ -351,15 +363,83 @@ func ValidateTransition(from, to string) bool {
 	return false
 }
 
+// ─── AcceptOrder ────────────────────────────────────────────────────
+
+func (s *Service) AcceptOrder(orderID, userID string) (*Order, error) {
+	o, err := s.store.GetByID(orderID)
+	if err != nil {
+		return nil, ErrOrderNotFound
+	}
+
+	if o.EscrowStatus != StatusNew {
+		return nil, ErrNotNewOrder
+	}
+
+	if userID != o.TenantID && userID != o.LandlordID {
+		return nil, ErrForbidden
+	}
+
+	if err := s.store.UpdateStatus(o.ID, StatusAwaitingDeposit, userID, "order accepted"); err != nil {
+		return nil, err
+	}
+	o.EscrowStatus = StatusAwaitingDeposit
+
+	s.publishCentrifugoOrderUpdate(o, "order_accepted")
+	return o, nil
+}
+
+// ─── RejectOrder ────────────────────────────────────────────────────
+
+func (s *Service) RejectOrder(orderID, userID string) (*Order, error) {
+	o, err := s.store.GetByID(orderID)
+	if err != nil {
+		return nil, ErrOrderNotFound
+	}
+
+	if o.EscrowStatus != StatusNew {
+		return nil, ErrNotNewOrder
+	}
+
+	if userID != o.TenantID && userID != o.LandlordID {
+		return nil, ErrForbidden
+	}
+
+	if err := s.store.UpdateStatus(o.ID, StatusRejected, userID, "order rejected"); err != nil {
+		return nil, err
+	}
+	o.EscrowStatus = StatusRejected
+
+	s.publishCentrifugoOrderUpdate(o, "order_rejected")
+	return o, nil
+}
+
 // ─── helpers ────────────────────────────────────────────────────────
+
+func (s *Service) publishCentrifugoOrderUpdate(o *Order, eventType string) {
+	if s.centrifugo == nil {
+		return
+	}
+
+	channel := fmt.Sprintf("orders:%s", o.ConversationID)
+	payload := map[string]interface{}{
+		"type":     eventType,
+		"order_id": o.ID,
+		"status":   o.EscrowStatus,
+		"order":    o,
+	}
+
+	if err := s.centrifugo.PublishJSON(channel, payload); err != nil {
+		log.Printf("[order] failed to publish centrifugo event %s: %v", eventType, err)
+	}
+}
 
 func (s *Service) publishOrderEvent(topic string, o *Order) {
 	evt := kafka.OrderEvent{
 		EventID:        uuid.New().String(),
 		OrderID:        o.ID,
 		PropertyID:     o.PropertyID,
-		TenantWallet:   o.TenantWallet,
-		LandlordWallet: o.LandlordWallet,
+		TenantWallet:   o.TenantID,
+		LandlordWallet: o.LandlordID,
 		DepositAmount:  o.DepositAmount,
 		RentAmount:     o.RentAmount,
 		EscrowStatus:   o.EscrowStatus,

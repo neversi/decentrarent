@@ -21,6 +21,11 @@ const (
 	TopicOrderDisputeOpened   = "order.dispute.opened"
 	TopicOrderDisputeResolved = "order.dispute.resolved"
 	TopicRentPaid             = "order.rent.paid"
+
+	// Solana on-chain event topics
+	TopicSolanaDepositLocked = "solana.deposit.locked"
+	TopicSolanaPartySigned   = "solana.party.signed"
+	TopicSolanaEscrowExpired = "solana.escrow.expired"
 )
 
 func AllTopics() []string {
@@ -33,6 +38,9 @@ func AllTopics() []string {
 		TopicOrderDisputeOpened,
 		TopicOrderDisputeResolved,
 		TopicRentPaid,
+		TopicSolanaDepositLocked,
+		TopicSolanaPartySigned,
+		TopicSolanaEscrowExpired,
 	}
 }
 
@@ -93,6 +101,31 @@ type RentPaidEvent struct {
 	PeriodStart time.Time `json:"period_start"`
 	PeriodEnd   time.Time `json:"period_end"`
 	Timestamp   time.Time `json:"timestamp"`
+}
+
+// ─── Solana on-chain event payloads ─────────────────────────────────
+
+type SolanaDepositLockedEvent struct {
+	Escrow        string `json:"escrow"`
+	Landlord      string `json:"landlord"`
+	Tenant        string `json:"tenant"`
+	DepositAmount uint64 `json:"deposit_amount"`
+	Deadline      int64  `json:"deadline"`
+	TxSignature   string `json:"tx_signature"`
+}
+
+type SolanaPartySignedEvent struct {
+	Escrow      string `json:"escrow"`
+	Signer      string `json:"signer"`
+	Role        string `json:"role"`
+	TxSignature string `json:"tx_signature"`
+}
+
+type SolanaEscrowExpiredEvent struct {
+	Escrow      string `json:"escrow"`
+	RefundedTo  string `json:"refunded_to"`
+	Amount      uint64 `json:"amount"`
+	TxSignature string `json:"tx_signature"`
 }
 
 // ─── Producer ───────────────────────────────────────────────────────

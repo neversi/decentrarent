@@ -88,22 +88,22 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	role := q.Get("role") // "tenant", "landlord", or "" (all)
+	role := q.Get("role")
 
 	filter := &ListFilter{
-		PropertyID:   q.Get("property_id"),
-		EscrowStatus: q.Get("status"),
-		Limit:        limit,
-		Offset:       offset,
+		PropertyID:     q.Get("property_id"),
+		ConversationID: q.Get("conversation_id"),
+		EscrowStatus:   q.Get("status"),
+		Limit:          limit,
+		Offset:         offset,
 	}
 
 	switch role {
 	case "tenant":
-		filter.TenantWallet = userID
+		filter.TenantID = userID
 	case "landlord":
-		filter.LandlordWallet = userID
+		filter.LandlordID = userID
 	default:
-		// Если роль не указана — показываем все ордера пользователя
 		orders, err := h.store.ListByParticipant(userID, limit, offset)
 		if err != nil {
 			http.Error(w, `{"error":"failed to list orders"}`, http.StatusInternalServerError)
@@ -150,8 +150,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Только участники могут видеть order
-	if o.TenantWallet != userID && o.LandlordWallet != userID {
+	if o.TenantID != userID && o.LandlordID != userID {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
@@ -362,7 +361,7 @@ func (h *Handler) GetPayments(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"order not found"}`, http.StatusNotFound)
 		return
 	}
-	if o.TenantWallet != userID && o.LandlordWallet != userID {
+	if o.TenantID != userID && o.LandlordID != userID {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
@@ -378,6 +377,62 @@ func (h *Handler) GetPayments(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(payments)
+}
+
+// ─── Accept godoc ──────────────────────────────────────────────────
+// @Summary Accept an order proposal
+// @Tags orders
+// @Security BearerAuth
+// @Produce json
+// @Param id path string true "Order ID"
+// @Success 200 {object} Order
+// @Router /orders/{id}/accept [post]
+func (h *Handler) Accept(w http.ResponseWriter, r *http.Request) {
+	userID := mw.GetUserID(r.Context())
+	id := chi.URLParam(r, "id")
+
+	o, err := h.service.AcceptOrder(id, userID)
+	if err != nil {
+		status := http.StatusBadRequest
+		if err == ErrOrderNotFound {
+			status = http.StatusNotFound
+		} else if err == ErrForbidden {
+			status = http.StatusForbidden
+		}
+		http.Error(w, `{"error":"`+err.Error()+`"}`, status)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(o)
+}
+
+// ─── Reject godoc ──────────────────────────────────────────────────
+// @Summary Reject an order proposal
+// @Tags orders
+// @Security BearerAuth
+// @Produce json
+// @Param id path string true "Order ID"
+// @Success 200 {object} Order
+// @Router /orders/{id}/reject [post]
+func (h *Handler) Reject(w http.ResponseWriter, r *http.Request) {
+	userID := mw.GetUserID(r.Context())
+	id := chi.URLParam(r, "id")
+
+	o, err := h.service.RejectOrder(id, userID)
+	if err != nil {
+		status := http.StatusBadRequest
+		if err == ErrOrderNotFound {
+			status = http.StatusNotFound
+		} else if err == ErrForbidden {
+			status = http.StatusForbidden
+		}
+		http.Error(w, `{"error":"`+err.Error()+`"}`, status)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(o)
 }
 
 // ─── GetHistory godoc ───────────────────────────────────────────────
@@ -398,7 +453,7 @@ func (h *Handler) GetHistory(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"order not found"}`, http.StatusNotFound)
 		return
 	}
-	if o.TenantWallet != userID && o.LandlordWallet != userID {
+	if o.TenantID != userID && o.LandlordID != userID {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
