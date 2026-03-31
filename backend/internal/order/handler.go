@@ -88,33 +88,12 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	role := q.Get("role")
-
 	filter := &ListFilter{
 		PropertyID:     q.Get("property_id"),
 		ConversationID: q.Get("conversation_id"),
 		EscrowStatus:   q.Get("status"),
 		Limit:          limit,
 		Offset:         offset,
-	}
-
-	switch role {
-	case "tenant":
-		filter.TenantID = userID
-	case "landlord":
-		filter.LandlordID = userID
-	default:
-		orders, err := h.store.ListByParticipant(userID, limit, offset)
-		if err != nil {
-			http.Error(w, `{"error":"failed to list orders"}`, http.StatusInternalServerError)
-			return
-		}
-		if orders == nil {
-			orders = []Order{}
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(orders)
-		return
 	}
 
 	orders, err := h.store.List(filter)

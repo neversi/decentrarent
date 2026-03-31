@@ -22,6 +22,11 @@
         "allow_subscribe_for_client": true,
         "allow_publish_for_subscriber": true,
         "force_recovery": true
+      },
+      {
+        "name": "orders",
+        "allow_subscribe_for_client": true,
+        "allow_publish_for_subscriber": true
       }
     ]
   }

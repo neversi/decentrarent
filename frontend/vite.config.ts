@@ -4,6 +4,9 @@ import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  optimizeDeps: {
+    include: ['@coral-xyz/anchor', '@solana/web3.js'],
+  },
   server: {
     host: true,
     port: 5173,
