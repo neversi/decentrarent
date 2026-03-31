@@ -152,8 +152,28 @@ pub struct EscrowAccount {
     pub landlord_signed: bool,
     pub tenant_signed: bool,
     pub bump: u8,
+    pub period: i64,
+    pub start_date: i64,
+    pub end_date: i64,
+    pub price_rent: u64,
 }
 
 impl EscrowAccount {
-    pub const SIZE: usize = 8 + 16 + 32 + 32 + 32 + 8 + 8 + 1 + 8 + 8 + 1 + 1 + 1 + 32;
+    pub const SIZE: usize = 8 // discriminator
+        + 16 // order_id
+        + 32 // landlord
+        + 32 // tenant
+        + 32 // authority
+        + 8 // deposit_amount
+        + 8 // total_rent_paid
+        + 1 // status
+        + 8 // created_at
+        + 8 // deadline
+        + 1 // landlord_signed
+        + 1 // tenant_signed
+        + 1 // bump
+        + 8 // period
+        + 8 // start_date
+        + 8 // end_date
+        + 8; // price_rent
 }
