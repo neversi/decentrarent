@@ -21,6 +21,7 @@ import ProfilePage from './pages/ProfilePage'
 
 // UI
 import BottomNav from './components/Layout/BottomNav'
+import { ToastProvider } from './features/toast/components/ToastProvider'
 
 /* ─────────────────────────────────────────── */
 
@@ -161,6 +162,7 @@ export default function App() {
       <WalletProvider wallets={[]} autoConnect>
         <WalletModalProvider>
           <BrowserRouter>
+            <ToastProvider />
             <AppShell>
               <AppRoutes />
             </AppShell>

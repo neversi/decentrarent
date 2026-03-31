@@ -9,7 +9,12 @@ import { apiFetch } from '../../../lib/api';
 import { MessageList } from './MessageList';
 import { MessageInput } from './MessageInput';
 import { ChatBadge } from './ChatBadge';
+import { useOrderUpdates } from '../../orders/hooks/useOrderUpdates';
+import { CreateOrderModal } from '../../orders/components/CreateOrderModal';
+import { OrderCard } from '../../orders/components/OrderCard';
+import { OrdersPanel } from '../../orders/components/OrdersPanel';
 import type { Conversation } from '../types';
+import type { Property } from '../../properties/types';
 
 export function ChatWindow() {
   const centrifugoRef = useCentrifugo();
@@ -18,6 +23,9 @@ export function ChatWindow() {
   const { token } = useAuthStore();
   const [seeding, setSeeding] = useState(false);
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
+  const [showOrderModal, setShowOrderModal] = useState(false);
+  const [showOrdersPanel, setShowOrdersPanel] = useState(false);
+  const [property, setProperty] = useState<Property | null>(null);
   const location = useLocation();
 
   const { user } = useAuthStore();
@@ -52,6 +60,15 @@ export function ChatWindow() {
     channel,
   );
 
+  const { orders, loadOrders } = useOrderUpdates(centrifugoRef, activeConv?.id || null);
+
+  useEffect(() => {
+    if (!selectedConversation) return;
+    apiFetch<Property>(`/properties/${selectedConversation.property_id}`)
+      .then(setProperty)
+      .catch(() => setProperty(null));
+  }, [selectedConversation?.property_id]);
+
   const handleSelectConversation = (conv: Conversation) => {
     setSelectedConversation(conv);
     setActiveConversation(conv.id);
@@ -85,31 +102,84 @@ export function ChatWindow() {
   if (selectedConversation) {
     return (
       <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', display: 'flex', flexDirection: 'column', background: '#0a0a0f', color: '#fff', zIndex: 1000 }}>
+        {/* Header with order buttons */}
         <div style={{ flexShrink: 0, padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
-          <div style={{ display: 'flex', alignItems: 'center' }}>
-            <button onClick={() => setSelectedConversation(null)} style={{ background: 'none', border: 'none', color: '#E07840', fontSize: 16, cursor: 'pointer', marginRight: 16 }}>
-              &larr; Back
-            </button>
-            <div>
-              <p style={{ fontSize: 14, fontWeight: 600 }}>
-                Property: {selectedConversation.property_id.slice(0, 8)}...
-              </p>
-              <p style={{ fontSize: 12, color: '#6A6A7A' }}>
-                {isLandlord(selectedConversation)
-                  ? `Loaner: ${shortWallet(selectedConversation.loaner_id)}`
-                  : `Landlord: ${shortWallet(selectedConversation.landlord_id)}`}
-              </p>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <button onClick={() => { setSelectedConversation(null); setShowOrdersPanel(false); }} style={{ background: 'none', border: 'none', color: '#E07840', fontSize: 16, cursor: 'pointer', marginRight: 16 }}>
+                &larr; Back
+              </button>
+              <div>
+                <p style={{ fontSize: 14, fontWeight: 600, color: '#e2e8f0' }}>
+                  {property?.title || `Property: ${selectedConversation.property_id.slice(0, 8)}...`}
+                </p>
+                <p style={{ fontSize: 12, color: '#6A6A7A' }}>
+                  {property ? `${property.price} SOL/${property.period_type}` : ''}
+                  {property ? ' \u00B7 ' : ''}
+                  {isLandlord(selectedConversation)
+                    ? `Loaner: ${shortWallet(selectedConversation.loaner_id)}`
+                    : `Landlord: ${shortWallet(selectedConversation.landlord_id)}`}
+                </p>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <button
+                onClick={() => setShowOrderModal(true)}
+                style={{
+                  padding: '6px 12px', background: 'rgba(224,120,64,0.15)', color: '#E07840',
+                  border: '1px solid rgba(224,120,64,0.3)', borderRadius: 6, fontSize: 12,
+                  cursor: 'pointer', fontWeight: 600,
+                }}
+              >
+                + Create Order
+              </button>
+              <button
+                onClick={() => setShowOrdersPanel(!showOrdersPanel)}
+                style={{
+                  padding: '6px 12px', background: 'rgba(255,255,255,0.05)', color: '#94a3b8',
+                  border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, fontSize: 12, cursor: 'pointer',
+                }}
+              >
+                {'\uD83D\uDCCB'} Orders {orders.length > 0 && (
+                  <span style={{
+                    background: '#E07840', color: 'white', padding: '1px 5px',
+                    borderRadius: 10, fontSize: 10, marginLeft: 4,
+                  }}>{orders.length}</span>
+                )}
+              </button>
             </div>
           </div>
         </div>
-        <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          <MessageList
-            messages={messages}
-            currentUserId={currentUserId}
-            onLoadMore={loadMore}
-          />
-          <MessageInput onSend={sendMessage} />
+
+        {/* Chat body + optional side panel */}
+        <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
+          <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+              <MessageList
+                messages={messages}
+                currentUserId={currentUserId}
+                onLoadMore={loadMore}
+              />
+              {orders.map((order) => (
+                <OrderCard key={order.id} order={order} onUpdated={loadOrders} />
+              ))}
+            </div>
+            <MessageInput onSend={sendMessage} />
+          </div>
+          {showOrdersPanel && (
+            <OrdersPanel orders={orders} onClose={() => setShowOrdersPanel(false)} />
+          )}
         </div>
+
+        {/* Create order modal */}
+        {showOrderModal && (
+          <CreateOrderModal
+            conversation={selectedConversation}
+            property={property}
+            onClose={() => setShowOrderModal(false)}
+            onCreated={loadOrders}
+          />
+        )}
       </div>
     );
   }
