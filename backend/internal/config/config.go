@@ -18,6 +18,8 @@ type Config struct {
 	MinioBucket         string
 	MinioUseSSL         bool
 	KafkaBrokers        []string
+	SolanaWSURL         string
+	SolanaProgramID     string
 }
 
 func Load() *Config {
@@ -34,6 +36,8 @@ func Load() *Config {
 		MinioBucket:         getEnv("MINIO_BUCKET", "decentrarent-media"),
 		MinioUseSSL:         getEnv("MINIO_USE_SSL", "false") == "true",
 		KafkaBrokers:        parseBrokers(getEnv("KAFKA_BROKERS", "localhost:9092")),
+		SolanaWSURL:         getEnv("SOLANA_WS_URL", "wss://api.devnet.solana.com"),
+		SolanaProgramID:     getEnv("SOLANA_PROGRAM_ID", "GNAZzNcftcRNMtjETiXupfpUqPmwQyhNCrTJeiZFkpWY"),
 	}
 }
 
