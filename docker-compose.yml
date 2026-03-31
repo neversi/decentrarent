@@ -6,7 +6,8 @@ services:
     ports:
       - "5173:5173"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
   backend:
     build:
@@ -29,6 +30,14 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
 
   centrifugo:
     image: centrifugo/centrifugo:v6.7
@@ -38,7 +47,8 @@ services:
       - ./centrifugo/config.json:/centrifugo/config.json
     command: centrifugo -c config.json
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
   db:
     image: postgres:16-alpine

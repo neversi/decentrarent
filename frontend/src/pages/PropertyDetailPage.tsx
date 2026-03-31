@@ -3,7 +3,9 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../features/auth/store'
 import { getProperty, updateProperty, deleteProperty, updatePropertyStatus, getUploadUrl, registerMedia, deleteMedia } from '../features/properties/api'
 import { formatPrice, TOKEN_INFO } from '../features/properties/utils'
+import { apiFetch } from '../lib/api'
 import type { Property } from '../features/properties/types'
+import type { Conversation } from '../features/chat/types'
 
 const STATUS_STYLE: Record<string, { bg: string; color: string; label: string }> = {
   listed:   { bg: 'rgba(61,214,140,0.12)',  color: '#3DD68C', label: 'Occupied' },
@@ -38,6 +40,9 @@ export default function PropertyDetailPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
   const [deletingMedia, setDeletingMedia] = useState<string | null>(null)
+
+  // Contact landlord
+  const [contacting, setContacting] = useState(false)
 
   const isOwner = user && property && user.id === property.owner_wallet
 
@@ -95,7 +100,6 @@ export default function PropertyDetailPage() {
         await fetch(upload_url, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } })
         await registerMedia(id, file_key, token)
       }
-      // Refresh property to get new media URLs
       const updated = await getProperty(id, token)
       setProperty(updated)
     } catch {
@@ -130,6 +134,26 @@ export default function PropertyDetailPage() {
       setError('Failed to update status.')
     } finally {
       setTogglingStatus(false)
+    }
+  }
+
+  const handleContactLandlord = async () => {
+    if (!property || !token) return
+    setContacting(true)
+    setError(null)
+    try {
+      const conv = await apiFetch<Conversation>('/conversations', {
+        method: 'POST',
+        body: JSON.stringify({
+          property_id: property.id,
+          landlord_id: property.owner_wallet,
+        }),
+      }, token)
+      navigate('/chat', { state: { conversation: conv } })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to start conversation.')
+    } finally {
+      setContacting(false)
     }
   }
 
@@ -226,8 +250,8 @@ export default function PropertyDetailPage() {
         </div>
       ) : (
         <div style={{ marginBottom: 20, position: 'relative' }}>
-          <div style={{ borderRadius: 16, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.07)', background: '#1C1C20', display: 'flex', alignItems: 'center', justifyContent: 'center', height: 180, fontSize: 48 }}>
-            🏠
+          <div style={{ borderRadius: 16, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.07)', background: '#1C1C20', display: 'flex', alignItems: 'center', justifyContent: 'center', height: 180 }}>
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#3A3A4A" strokeWidth="1.5"><path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z"/><path d="M9 21V12h6v9"/></svg>
           </div>
           {isOwner && (
             <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
@@ -320,6 +344,28 @@ export default function PropertyDetailPage() {
           </>
         )}
       </div>
+
+      {/* Contact Landlord — non-owner view */}
+      {!isOwner && !editing && (
+        <button onClick={handleContactLandlord} disabled={contacting} style={{
+          width: '100%', background: '#E07840', border: 'none', borderRadius: 14, padding: 16,
+          color: 'white', fontWeight: 700, fontSize: 16, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif",
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+          opacity: contacting ? 0.7 : 1, marginBottom: 16,
+        }}>
+          {contacting ? (
+            <>
+              <div style={{ width: 18, height: 18, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: 'white', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+              Starting conversation...
+            </>
+          ) : (
+            <>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2v10z"/></svg>
+              Contact Landlord
+            </>
+          )}
+        </button>
+      )}
 
       {/* Owner actions */}
       {isOwner && !editing && (

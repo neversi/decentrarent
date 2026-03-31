@@ -107,6 +107,54 @@ func (h *Handler) GetMessages(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(msgs)
 }
 
+type createConversationRequest struct {
+	PropertyID string `json:"property_id"`
+	LandlordID string `json:"landlord_id"`
+}
+
+// CreateConversation godoc
+// @Summary Create or get a conversation
+// @Description Creates a new conversation between the authenticated user (loaner) and a landlord for a property, or returns the existing one
+// @Tags chat
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param body body createConversationRequest true "Conversation details"
+// @Success 200 {object} Conversation
+// @Router /conversations [post]
+func (h *Handler) CreateConversation(w http.ResponseWriter, r *http.Request) {
+	userID := mw.GetUserID(r.Context())
+	if userID == "" {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	var req createConversationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+
+	if req.PropertyID == "" || req.LandlordID == "" {
+		http.Error(w, `{"error":"property_id and landlord_id are required"}`, http.StatusBadRequest)
+		return
+	}
+
+	if req.LandlordID == userID {
+		http.Error(w, `{"error":"cannot start a conversation with yourself"}`, http.StatusBadRequest)
+		return
+	}
+
+	conv, err := h.store.GetOrCreateConversation(req.PropertyID, req.LandlordID, userID)
+	if err != nil {
+		http.Error(w, `{"error":"failed to create conversation"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(conv)
+}
+
 type sendMessageRequest struct {
 	ConversationID string `json:"conversation_id"`
 	Content        string `json:"content"`

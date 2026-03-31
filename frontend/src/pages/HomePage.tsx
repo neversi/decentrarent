@@ -44,9 +44,9 @@ export default function HomePage() {
   return (
     <div style={{ padding: '0 20px 100px' }}>
       {/* Header */}
-      <div className="fu" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '56px 0 28px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '56px 0 28px' }}>
         <div>
-          <p style={{ color: '#6A6A7A', fontSize: 13, marginBottom: 3 }}>Good morning 👋</p>
+          <p style={{ color: '#6A6A7A', fontSize: 13, marginBottom: 3 }}>Good morning</p>
           <h1 style={{ fontFamily: "'Syne', sans-serif", fontSize: 24, fontWeight: 800, letterSpacing: '-0.02em' }}>
             {firstName}
           </h1>
@@ -63,7 +63,7 @@ export default function HomePage() {
       </div>
 
       {/* Balance Card */}
-      <div className="fu1" style={{
+      <div style={{
         background: 'linear-gradient(135deg, #1A1208, #1C1410, #141416)',
         borderRadius: 20, padding: 24, marginBottom: 20,
         border: '1px solid rgba(224,120,64,0.2)', position: 'relative', overflow: 'hidden',
@@ -91,26 +91,23 @@ export default function HomePage() {
       </div>
 
       {/* Quick actions */}
-      <div className="fu2" style={{ display: 'flex', gap: 10, marginBottom: 28 }}>
-        <Link to="/listings/create" style={{ flex: 1, textDecoration: 'none' }}>
-          <div style={{ background: '#E07840', borderRadius: 14, padding: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            <span style={{ color: 'white', fontWeight: 600, fontSize: 14 }}>Add Listing</span>
-          </div>
-        </Link>
-        <Link to="/chat" style={{ flex: 1, textDecoration: 'none' }}>
-          <div style={{ background: '#1C1C20', borderRadius: 14, padding: 14, border: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#9A9AAA" strokeWidth="1.8"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2v10z"/></svg>
-            <span style={{ color: '#9A9AAA', fontWeight: 600, fontSize: 14 }}>Messages</span>
-          </div>
-        </Link>
-      </div>
+      <Link to="/chat" style={{ textDecoration: 'none', display: 'block', marginBottom: 28 }}>
+        <div style={{ background: '#1C1C20', borderRadius: 14, padding: 14, border: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#9A9AAA" strokeWidth="1.8"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2v10z"/></svg>
+          <span style={{ color: '#9A9AAA', fontWeight: 600, fontSize: 14 }}>Messages</span>
+        </div>
+      </Link>
 
-      {/* Listings */}
-      <div className="fu3">
+      {/* My Listings */}
+      <div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
           <p style={{ fontFamily: "'Syne',sans-serif", fontWeight: 700, fontSize: 13, color: '#4A4A5A', textTransform: 'uppercase', letterSpacing: '0.06em' }}>My Listings</p>
-          <Link to="/listings" style={{ color: '#E07840', fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>See all</Link>
+          <Link to="/listings/create" style={{ textDecoration: 'none' }}>
+            <div style={{ background: '#E07840', borderRadius: 10, padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 5 }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              <span style={{ color: 'white', fontWeight: 600, fontSize: 13 }}>Add</span>
+            </div>
+          </Link>
         </div>
 
         {loading ? (
@@ -128,14 +125,14 @@ export default function HomePage() {
                     <div style={{ width: 46, height: 46, borderRadius: 12, background: '#1C1C20', border: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0, overflow: 'hidden' }}>
                       {img
                         ? <img src={img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                        : '🏠'}
+                        : <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6A6A7A" strokeWidth="1.5"><path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z"/><path d="M9 21V12h6v9"/></svg>}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontWeight: 600, fontSize: 14, marginBottom: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.title}</p>
+                      <p style={{ fontWeight: 600, fontSize: 14, marginBottom: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#F0F0F5' }}>{l.title}</p>
                       <p style={{ color: '#6A6A7A', fontSize: 12 }}>{l.location}</p>
                     </div>
                     <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                      <p style={{ fontWeight: 700, fontSize: 14, marginBottom: 5, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
+                      <p style={{ fontWeight: 700, fontSize: 14, marginBottom: 5, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4, color: '#F0F0F5' }}>
                       {l.status === 'unlisted' ? '—' : <>
                         <img src={TOKEN_INFO[l.token_mint]?.icon || TOKEN_INFO['SOL'].icon} alt="" style={{ width: 14, height: 14, borderRadius: '50%' }} />
                         {formatPrice(l.price, l.token_mint)}
