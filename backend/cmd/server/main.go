@@ -25,6 +25,7 @@ import (
 	"github.com/abdro/decentrarent/backend/internal/media"
 	"github.com/abdro/decentrarent/backend/internal/order"
 	"github.com/abdro/decentrarent/backend/internal/property"
+	solanapkg "github.com/abdro/decentrarent/backend/internal/solana"
 	"github.com/abdro/decentrarent/backend/internal/user"
 )
 
@@ -127,6 +128,13 @@ func main() {
 	} else {
 		defer orderConsumers.Close()
 		orderConsumers.Start(ctx)
+	}
+
+	// ─── Solana event listener ──────────────────────────────────────
+	if kafkaProducer != nil {
+		solanaListener := solanapkg.NewListener(cfg.SolanaWSURL, cfg.SolanaProgramID, kafkaProducer)
+		go solanaListener.Start(ctx)
+		log.Println("Solana event listener started")
 	}
 
 	// ─── Handlers ───────────────────────────────────────────────────

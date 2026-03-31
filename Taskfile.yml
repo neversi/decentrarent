@@ -51,3 +51,13 @@ tasks:
     desc: Install frontend dependencies
     dir: frontend
     cmd: npm install
+
+  backend:test:
+    desc: Run backend Go tests
+    dir: backend
+    cmd: go test ./... -v
+
+  backend:build:
+    desc: Build backend binary
+    dir: backend
+    cmd: go build ./cmd/server
