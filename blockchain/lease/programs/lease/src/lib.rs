@@ -19,12 +19,31 @@ pub mod lease {
         order_id: [u8; 16],
         deposit_amount: u64,
         deadline_ts: i64,
+        period: i64,
+        start_date: i64,
+        end_date: i64,
+        price_rent: u64,
     ) -> Result<()> {
         require!(deposit_amount > 0, EscrowError::InvalidAmount);
+        require!(price_rent > 0, EscrowError::InvalidAmount);
+        require!(period > 0, EscrowError::InvalidPeriod);
+
         let clock = Clock::get()?;
         require!(
             deadline_ts > clock.unix_timestamp,
             EscrowError::InvalidDeadline
+        );
+        require!(
+            end_date > clock.unix_timestamp,
+            EscrowError::InvalidEndDate
+        );
+        require!(
+            end_date > start_date,
+            EscrowError::InvalidTimestamp
+        );
+        require!(
+            (end_date - start_date) % period == 0,
+            EscrowError::InvalidPeriod
         );
 
         let escrow_info = ctx.accounts.escrow.to_account_info();
@@ -40,6 +59,10 @@ pub mod lease {
         escrow.landlord_signed = false;
         escrow.tenant_signed = false;
         escrow.bump = ctx.bumps.escrow;
+        escrow.period = period;
+        escrow.start_date = start_date;
+        escrow.end_date = end_date;
+        escrow.price_rent = price_rent;
 
         system_program::transfer(
             CpiContext::new(
@@ -143,6 +166,24 @@ pub mod lease {
             escrow.status == EscrowStatus::Active,
             EscrowError::InvalidStatus
         );
+        require!(
+            amount == escrow.price_rent,
+            EscrowError::InvalidAmount
+        );
+
+        let total_periods = (escrow.end_date - escrow.start_date)
+            .checked_div(escrow.period)
+            .ok_or(EscrowError::InvalidPeriod)? as u64;
+
+        let max_total = escrow.price_rent
+            .checked_mul(total_periods)
+            .ok_or(EscrowError::Overflow)?;
+
+        let new_total = escrow.total_rent_paid
+            .checked_add(amount)
+            .ok_or(EscrowError::Overflow)?;
+
+        require!(new_total <= max_total, EscrowError::RentOverpaid);
 
         system_program::transfer(
             CpiContext::new(
@@ -155,10 +196,7 @@ pub mod lease {
             amount,
         )?;
 
-        escrow.total_rent_paid = escrow
-            .total_rent_paid
-            .checked_add(amount)
-            .ok_or(EscrowError::Overflow)?;
+        escrow.total_rent_paid = new_total;
         let clock = Clock::get()?;
 
         emit!(RentPaid {
