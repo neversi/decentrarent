@@ -152,6 +152,10 @@ pub struct EscrowAccount {
     pub landlord_signed: bool,
     pub tenant_signed: bool,
     pub bump: u8,
+    pub period: i64, // 1m
+    pub start_date: i64, // 1j
+    pub end_date: i64, // 1october
+    pub price_period: i64, // 10k -> 100k
 }
 
 impl EscrowAccount {
