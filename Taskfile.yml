@@ -1,0 +1,53 @@
+version: '3'
+
+tasks:
+  up:
+    desc: Start all services
+    cmd: docker compose -f docker-compose.dev.yml -f docker-compose.yml up -d
+
+  down:
+    desc: Stop all services
+    cmd: docker compose down
+
+  logs:
+    desc: Tail all service logs
+    cmd: docker compose logs -f
+
+  db:reset:
+    desc: Reset database (drops volume)
+    cmds:
+      - docker compose down -v
+      - docker compose up -d db
+
+  build:
+    desc: Build Anchor program and sync IDL
+    dir: blockchain/lease
+    cmds:
+      - anchor build
+      - task: idl:copy
+
+  deploy:
+    desc: Deploy to devnet
+    dir: blockchain/lease
+    cmd: anchor deploy
+
+  anchor:test:
+    desc: Run Anchor integration tests
+    dir: blockchain/lease
+    cmd: anchor test
+
+  idl:copy:
+    desc: Copy IDL to frontend
+    cmds:
+      - mkdir -p frontend/src/features/escrow/idl
+      - cp blockchain/lease/target/idl/lease.json frontend/src/features/escrow/idl/lease.json
+
+  frontend:dev:
+    desc: Start Vite dev server
+    dir: frontend
+    cmd: npm run dev
+
+  frontend:install:
+    desc: Install frontend dependencies
+    dir: frontend
+    cmd: npm install

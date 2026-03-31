@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useCentrifugo } from '../hooks/useCentrifugo';
 import { useConversations } from '../hooks/useConversations';
 import { useChat } from '../hooks/useChat';
@@ -17,9 +18,23 @@ export function ChatWindow() {
   const { token } = useAuthStore();
   const [seeding, setSeeding] = useState(false);
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
+  const location = useLocation();
 
   const { user } = useAuthStore();
   const currentUserId = user?.id || '';
+
+  // Auto-open conversation passed from PropertyDetailPage
+  useEffect(() => {
+    const state = location.state as { conversation?: Conversation } | null;
+    if (state?.conversation) {
+      setSelectedConversation(state.conversation);
+      setActiveConversation(state.conversation.id);
+      clearUnread(state.conversation.id);
+      refetch();
+      // Clear the state so it doesn't re-trigger on re-renders
+      window.history.replaceState({}, '');
+    }
+  }, [location.state]);
 
   const activeConv = useMemo(
     () => selectedConversation || conversations.find((c) => c.id === activeConversationId) || null,
@@ -73,7 +88,7 @@ export function ChatWindow() {
         <div style={{ flexShrink: 0, padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
           <div style={{ display: 'flex', alignItems: 'center' }}>
             <button onClick={() => setSelectedConversation(null)} style={{ background: 'none', border: 'none', color: '#E07840', fontSize: 16, cursor: 'pointer', marginRight: 16 }}>
-              ← Back
+              &larr; Back
             </button>
             <div>
               <p style={{ fontSize: 14, fontWeight: 600 }}>
@@ -97,7 +112,9 @@ export function ChatWindow() {
         </div>
       </div>
     );
-  }  return (
+  }
+
+  return (
     <div style={{ padding: '0 20px 100px', minHeight: '100vh', background: '#0a0a0f', color: '#fff' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '56px 0 28px' }}>
         <div>
@@ -144,7 +161,7 @@ export function ChatWindow() {
                 onMouseLeave={(e) => (e.currentTarget.style.background = '#141416')}
               >
                 <div style={{ width: 46, height: 46, borderRadius: 12, background: '#1C1C20', border: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>
-                  💬
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6A6A7A" strokeWidth="1.5"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2v10z"/></svg>
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>

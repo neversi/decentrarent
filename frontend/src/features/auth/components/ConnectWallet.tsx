@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
@@ -33,6 +33,16 @@ export function ConnectWallet() {
   const [regPhone, setRegPhone] = useState('');
   const [regPassword, setRegPassword] = useState('');
   const [regWallet, setRegWallet] = useState('');
+
+  const walletConnectAttempted = useRef(false);
+
+  // Auto-trigger sign-in when wallet connects after modal selection
+  useEffect(() => {
+    if (connected && publicKey && signMessage && walletConnectAttempted.current) {
+      walletConnectAttempted.current = false;
+      handleWalletConnect();
+    }
+  }, [connected, publicKey, signMessage]);
 
   if (isAuthenticated) {
     return <Navigate to="/home" replace />;
@@ -90,6 +100,7 @@ export function ConnectWallet() {
 
   const handleWalletConnect = async () => {
     if (!connected || !publicKey || !signMessage) {
+      walletConnectAttempted.current = true;
       setVisible(true);
       return;
     }

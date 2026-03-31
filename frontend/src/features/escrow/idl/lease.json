@@ -1,0 +1,1027 @@
+{
+  "address": "GNAZzNcftcRNMtjETiXupfpUqPmwQyhNCrTJeiZFkpWY",
+  "metadata": {
+    "name": "lease",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Created with Anchor"
+  },
+  "instructions": [
+    {
+      "name": "expire_escrow",
+      "docs": [
+        "Дедлайн подписания истек - депозит возвращается арендатору"
+      ],
+      "discriminator": [
+        49,
+        150,
+        54,
+        201,
+        45,
+        106,
+        39,
+        175
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "tenant",
+          "writable": true
+        },
+        {
+          "name": "escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "escrow.landlord",
+                "account": "EscrowAccount"
+              },
+              {
+                "kind": "account",
+                "path": "escrow.tenant",
+                "account": "EscrowAccount"
+              },
+              {
+                "kind": "account",
+                "path": "escrow.order_id",
+                "account": "EscrowAccount"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "landlord_sign",
+      "docs": [
+        "Шаг 2.1",
+        "Арендодатель подписывает договор on-chain"
+      ],
+      "discriminator": [
+        210,
+        71,
+        96,
+        170,
+        216,
+        86,
+        185,
+        155
+      ],
+      "accounts": [
+        {
+          "name": "landlord",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "landlord"
+              },
+              {
+                "kind": "account",
+                "path": "escrow.tenant",
+                "account": "EscrowAccount"
+              },
+              {
+                "kind": "account",
+                "path": "escrow.order_id",
+                "account": "EscrowAccount"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "lock_deposit",
+      "docs": [
+        "Шаг 1",
+        "Арендатор переводит только депозит аренда платится отдельно через pay_rent"
+      ],
+      "discriminator": [
+        188,
+        133,
+        191,
+        52,
+        92,
+        123,
+        37,
+        56
+      ],
+      "accounts": [
+        {
+          "name": "tenant",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "landlord"
+        },
+        {
+          "name": "authority"
+        },
+        {
+          "name": "escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "landlord"
+              },
+              {
+                "kind": "account",
+                "path": "tenant"
+              },
+              {
+                "kind": "arg",
+                "path": "order_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "order_id",
+          "type": {
+            "array": [
+              "u8",
+              16
+            ]
+          }
+        },
+        {
+          "name": "deposit_amount",
+          "type": "u64"
+        },
+        {
+          "name": "deadline_ts",
+          "type": "i64"
+        }
+      ]
+    },
+    {
+      "name": "open_dispute",
+      "docs": [
+        "Открыть спор - депозит замораживается"
+      ],
+      "discriminator": [
+        137,
+        25,
+        99,
+        119,
+        23,
+        223,
+        161,
+        42
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "escrow.landlord",
+                "account": "EscrowAccount"
+              },
+              {
+                "kind": "account",
+                "path": "escrow.tenant",
+                "account": "EscrowAccount"
+              },
+              {
+                "kind": "account",
+                "path": "escrow.order_id",
+                "account": "EscrowAccount"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "reason",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "pay_rent",
+      "docs": [
+        "Шаг 3",
+        "Арендатор платит за месяц аренды"
+      ],
+      "discriminator": [
+        69,
+        155,
+        112,
+        183,
+        178,
+        234,
+        94,
+        100
+      ],
+      "accounts": [
+        {
+          "name": "tenant",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "landlord",
+          "writable": true
+        },
+        {
+          "name": "escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "escrow.landlord",
+                "account": "EscrowAccount"
+              },
+              {
+                "kind": "account",
+                "path": "tenant"
+              },
+              {
+                "kind": "account",
+                "path": "escrow.order_id",
+                "account": "EscrowAccount"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "release_deposit_to_tenant",
+      "docs": [
+        "Вернуть депозит арендатору — нормальное окончание аренды"
+      ],
+      "discriminator": [
+        207,
+        198,
+        51,
+        27,
+        175,
+        167,
+        225,
+        110
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "tenant",
+          "writable": true
+        },
+        {
+          "name": "landlord",
+          "writable": true
+        },
+        {
+          "name": "escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "escrow.landlord",
+                "account": "EscrowAccount"
+              },
+              {
+                "kind": "account",
+                "path": "escrow.tenant",
+                "account": "EscrowAccount"
+              },
+              {
+                "kind": "account",
+                "path": "escrow.order_id",
+                "account": "EscrowAccount"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "resolve_dispute_landlord",
+      "docs": [
+        "Спор решен в пользу арендодателя - депозит выплачивается ему"
+      ],
+      "discriminator": [
+        192,
+        91,
+        45,
+        225,
+        65,
+        140,
+        19,
+        1
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "tenant",
+          "writable": true
+        },
+        {
+          "name": "landlord",
+          "writable": true
+        },
+        {
+          "name": "escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "escrow.landlord",
+                "account": "EscrowAccount"
+              },
+              {
+                "kind": "account",
+                "path": "escrow.tenant",
+                "account": "EscrowAccount"
+              },
+              {
+                "kind": "account",
+                "path": "escrow.order_id",
+                "account": "EscrowAccount"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "reason",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "resolve_dispute_tenant",
+      "docs": [
+        "Спор решен в пользу арендатора - депозит возвращается ему"
+      ],
+      "discriminator": [
+        208,
+        202,
+        69,
+        150,
+        0,
+        29,
+        209,
+        185
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "tenant",
+          "writable": true
+        },
+        {
+          "name": "landlord",
+          "writable": true
+        },
+        {
+          "name": "escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "escrow.landlord",
+                "account": "EscrowAccount"
+              },
+              {
+                "kind": "account",
+                "path": "escrow.tenant",
+                "account": "EscrowAccount"
+              },
+              {
+                "kind": "account",
+                "path": "escrow.order_id",
+                "account": "EscrowAccount"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "reason",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "tenant_sign",
+      "docs": [
+        "Шаг 2.2",
+        "Арендатор подписывает договор on-chain"
+      ],
+      "discriminator": [
+        5,
+        205,
+        186,
+        240,
+        88,
+        176,
+        49,
+        171
+      ],
+      "accounts": [
+        {
+          "name": "tenant",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "escrow.landlord",
+                "account": "EscrowAccount"
+              },
+              {
+                "kind": "account",
+                "path": "tenant"
+              },
+              {
+                "kind": "account",
+                "path": "escrow.order_id",
+                "account": "EscrowAccount"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "EscrowAccount",
+      "discriminator": [
+        36,
+        69,
+        48,
+        18,
+        128,
+        225,
+        125,
+        135
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "DepositLocked",
+      "discriminator": [
+        32,
+        241,
+        131,
+        66,
+        63,
+        132,
+        192,
+        116
+      ]
+    },
+    {
+      "name": "DepositReleased",
+      "discriminator": [
+        124,
+        51,
+        186,
+        122,
+        47,
+        97,
+        234,
+        181
+      ]
+    },
+    {
+      "name": "DisputeOpened",
+      "discriminator": [
+        239,
+        222,
+        102,
+        235,
+        193,
+        85,
+        1,
+        214
+      ]
+    },
+    {
+      "name": "DocumentSigned",
+      "discriminator": [
+        159,
+        171,
+        79,
+        75,
+        22,
+        3,
+        177,
+        43
+      ]
+    },
+    {
+      "name": "EscrowExpired",
+      "discriminator": [
+        189,
+        22,
+        170,
+        250,
+        75,
+        218,
+        58,
+        112
+      ]
+    },
+    {
+      "name": "PartySignedEvent",
+      "discriminator": [
+        169,
+        92,
+        130,
+        193,
+        52,
+        197,
+        129,
+        22
+      ]
+    },
+    {
+      "name": "RentPaid",
+      "discriminator": [
+        140,
+        29,
+        172,
+        69,
+        152,
+        38,
+        73,
+        241
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "InvalidAmount",
+      "msg": "Amount must be greater than zero"
+    },
+    {
+      "code": 6001,
+      "name": "InvalidDeadline",
+      "msg": "Deadline must be in the future"
+    },
+    {
+      "code": 6002,
+      "name": "DeadlineNotReached",
+      "msg": "Deadline has not been reached yet"
+    },
+    {
+      "code": 6003,
+      "name": "DeadlineExpired",
+      "msg": "Escrow deadline has expired"
+    },
+    {
+      "code": 6004,
+      "name": "InvalidStatus",
+      "msg": "Invalid escrow status for this operation"
+    },
+    {
+      "code": 6005,
+      "name": "Unauthorized",
+      "msg": "Unauthorized signer"
+    },
+    {
+      "code": 6006,
+      "name": "AlreadySigned",
+      "msg": "Already signed"
+    },
+    {
+      "code": 6007,
+      "name": "Overflow",
+      "msg": "Arithmetic overflow"
+    },
+    {
+      "code": 6008,
+      "name": "ReasonTooLong",
+      "msg": "Reason too long (max 200 chars)"
+    }
+  ],
+  "types": [
+    {
+      "name": "DepositLocked",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "escrow",
+            "type": "pubkey"
+          },
+          {
+            "name": "landlord",
+            "type": "pubkey"
+          },
+          {
+            "name": "tenant",
+            "type": "pubkey"
+          },
+          {
+            "name": "deposit_amount",
+            "type": "u64"
+          },
+          {
+            "name": "deadline",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DepositReleased",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "escrow",
+            "type": "pubkey"
+          },
+          {
+            "name": "recipient",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "reason",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DisputeOpened",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "escrow",
+            "type": "pubkey"
+          },
+          {
+            "name": "reason",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DocumentSigned",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "escrow",
+            "type": "pubkey"
+          },
+          {
+            "name": "order_id",
+            "type": {
+              "array": [
+                "u8",
+                16
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "EscrowAccount",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "order_id",
+            "type": {
+              "array": [
+                "u8",
+                16
+              ]
+            }
+          },
+          {
+            "name": "landlord",
+            "type": "pubkey"
+          },
+          {
+            "name": "tenant",
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "deposit_amount",
+            "type": "u64"
+          },
+          {
+            "name": "total_rent_paid",
+            "type": "u64"
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": {
+                "name": "EscrowStatus"
+              }
+            }
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "deadline",
+            "type": "i64"
+          },
+          {
+            "name": "landlord_signed",
+            "type": "bool"
+          },
+          {
+            "name": "tenant_signed",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EscrowExpired",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "escrow",
+            "type": "pubkey"
+          },
+          {
+            "name": "refunded_to",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EscrowStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "AwaitingSignatures"
+          },
+          {
+            "name": "Active"
+          },
+          {
+            "name": "Disputed"
+          },
+          {
+            "name": "Expired"
+          },
+          {
+            "name": "Settled"
+          },
+          {
+            "name": "DisputeResolvedTenant"
+          },
+          {
+            "name": "DisputeResolvedLandlord"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PartySignedEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "escrow",
+            "type": "pubkey"
+          },
+          {
+            "name": "signer",
+            "type": "pubkey"
+          },
+          {
+            "name": "role",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RentPaid",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "escrow",
+            "type": "pubkey"
+          },
+          {
+            "name": "tenant",
+            "type": "pubkey"
+          },
+          {
+            "name": "landlord",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "total_paid",
+            "type": "u64"
+          },
+          {
+            "name": "paid_at",
+            "type": "i64"
+          }
+        ]
+      }
+    }
+  ]
+}
