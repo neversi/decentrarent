@@ -1,0 +1,36 @@
+{
+  "expo": {
+    "name": "DecentraRent",
+    "slug": "decentrarent",
+    "scheme": "decentrarent",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "platforms": [
+      "ios",
+      "android"
+    ],
+    "newArchEnabled": true,
+    "plugins": [
+      "expo-router",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 26
+          }
+        }
+      ]
+    ],
+    "extra": {
+      "apiUrl": "http://10.100.32.91:8080",
+      "centrifugoUrl": "ws://10.100.32.91:8000/connection/websocket",
+      "router": {
+        "origin": false
+      }
+    },
+    "android": {
+      "package": "com.naiommie.decentrarent"
+    }
+  }
+}

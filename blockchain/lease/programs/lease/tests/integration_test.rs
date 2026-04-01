@@ -8,7 +8,7 @@ use solana_sdk::{
     transaction::Transaction,
 };
 use std::str::FromStr;
-use uuid::{Uuid};
+use uuid::Uuid;
 
 // anchor build
 // SBF_OUT_DIR=$(pwd)/target/deploy cargo test -p lease -- --nocapture
@@ -39,7 +39,6 @@ async fn setup() -> (BanksClient, Keypair, Keypair, Keypair, Keypair, Uuid) {
     let tenant = Keypair::new();
     let authority = Keypair::new();
     let uuid = Uuid::now_v7();
-
 
     // Пополняем балансы
     program_test.add_account(
@@ -87,13 +86,17 @@ fn deadline_3_days() -> i64 {
     now + 3 * 24 * 60 * 60
 }
 
-/// Deadline в прошлом (для теста expire)
-fn deadline_past() -> i64 {
+const PRICE_RENT: u64 = 1_000_000_000;
+
+fn test_lease_dates() -> (i64, i64, i64) {
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_secs() as i64;
-    now - 1
+    let period = 2592000; // 30 days
+    let start_date = now;
+    let end_date = now + 12 * period;
+    (period, start_date, end_date)
 }
 
 #[tokio::test]
@@ -104,6 +107,7 @@ async fn test_lock_deposit() {
         find_escrow_pda(&landlord.pubkey(), &tenant.pubkey(), order_id.as_bytes());
     let deposit_amount: u64 = 1_000_000_000; // 1 SOL
     let deadline = deadline_3_days();
+    let (period, start_date, end_date) = test_lease_dates();
 
     let tenant_balance_before = banks_client.get_balance(tenant.pubkey()).await.unwrap();
 
@@ -116,6 +120,10 @@ async fn test_lock_deposit() {
         order_id.as_bytes(),
         deposit_amount,
         deadline,
+        period,
+        start_date,
+        end_date,
+        PRICE_RENT,
     );
 
     let mut tx = Transaction::new_with_payer(&[ix], Some(&payer.pubkey()));
@@ -148,6 +156,7 @@ async fn test_landlord_sign() {
         find_escrow_pda(&landlord.pubkey(), &tenant.pubkey(), order_id.as_bytes());
 
     // Сначала lock_deposit
+    let (period, start_date, end_date) = test_lease_dates();
     let ix_lock = lock_deposit_ix(
         &landlord.pubkey(),
         &tenant.pubkey(),
@@ -156,6 +165,10 @@ async fn test_landlord_sign() {
         order_id.as_bytes(),
         1_000_000_000,
         deadline_3_days(),
+        period,
+        start_date,
+        end_date,
+        PRICE_RENT,
     );
     let mut tx = Transaction::new_with_payer(&[ix_lock], Some(&payer.pubkey()));
     let blockhash = banks_client.get_latest_blockhash().await.unwrap();
@@ -179,6 +192,7 @@ async fn test_both_sign_becomes_active() {
         find_escrow_pda(&landlord.pubkey(), &tenant.pubkey(), order_id.as_bytes());
 
     // lock_deposit
+    let (period, start_date, end_date) = test_lease_dates();
     let ix = lock_deposit_ix(
         &landlord.pubkey(),
         &tenant.pubkey(),
@@ -187,6 +201,10 @@ async fn test_both_sign_becomes_active() {
         order_id.as_bytes(),
         1_000_000_000,
         deadline_3_days(),
+        period,
+        start_date,
+        end_date,
+        PRICE_RENT,
     );
     let mut tx = Transaction::new_with_payer(&[ix], Some(&payer.pubkey()));
     let bh = banks_client.get_latest_blockhash().await.unwrap();
@@ -215,7 +233,7 @@ async fn test_pay_rent() {
 
     let (escrow_pda, _) =
         find_escrow_pda(&landlord.pubkey(), &tenant.pubkey(), order_id.as_bytes());
-    let rent_amount: u64 = 2_000_000_000; // 2 SOL
+    let rent_amount: u64 = PRICE_RENT;
 
     // Полный флоу до Active
     activate_escrow(
@@ -396,10 +414,12 @@ async fn test_dispute_resolved_for_tenant() {
 }
 #[tokio::test]
 async fn test_cannot_sign_twice() {
-    let (banks_client, payer, landlord, tenant, authority, order_id) = setup().await;
+    let (mut banks_client, payer, landlord, tenant, authority, order_id) = setup().await;
 
     let (escrow_pda, _) =
         find_escrow_pda(&landlord.pubkey(), &tenant.pubkey(), order_id.as_bytes());
+
+    let  (period, start_date, end_date) = test_lease_dates();
 
     let ix = lock_deposit_ix(
         &landlord.pubkey(),
@@ -409,6 +429,10 @@ async fn test_cannot_sign_twice() {
         order_id.as_bytes(),
         1_000_000_000,
         deadline_3_days(),
+        period,
+        start_date,
+        end_date,
+        PRICE_RENT,
     );
     let mut tx = Transaction::new_with_payer(&[ix], Some(&payer.pubkey()));
     let bh = banks_client.get_latest_blockhash().await.unwrap();
@@ -425,7 +449,12 @@ async fn test_cannot_sign_twice() {
     // Вторая подпись — должна упасть
     let ix = landlord_sign_ix(&landlord.pubkey(), &escrow_pda);
     let mut tx = Transaction::new_with_payer(&[ix], Some(&payer.pubkey()));
-    let bh = banks_client.get_latest_blockhash().await.unwrap();
+
+    let prev_bh = banks_client.get_latest_blockhash().await.unwrap();
+    let bh = banks_client
+        .get_new_latest_blockhash(&prev_bh)
+        .await
+        .unwrap();
     tx.sign(&[&payer, &landlord], bh);
     let result = banks_client.process_transaction(tx).await;
 
@@ -441,6 +470,7 @@ async fn test_cannot_pay_rent_before_both_signed() {
         find_escrow_pda(&landlord.pubkey(), &tenant.pubkey(), order_id.as_bytes());
 
     // Только lock_deposit, без подписей
+    let (period, start_date, end_date) = test_lease_dates();
     let ix = lock_deposit_ix(
         &landlord.pubkey(),
         &tenant.pubkey(),
@@ -449,6 +479,10 @@ async fn test_cannot_pay_rent_before_both_signed() {
         order_id.as_bytes(),
         1_000_000_000,
         deadline_3_days(),
+        period,
+        start_date,
+        end_date,
+        PRICE_RENT,
     );
     let mut tx = Transaction::new_with_payer(&[ix], Some(&payer.pubkey()));
     let bh = banks_client.get_latest_blockhash().await.unwrap();
@@ -460,7 +494,7 @@ async fn test_cannot_pay_rent_before_both_signed() {
         &tenant.pubkey(),
         &landlord.pubkey(),
         &escrow_pda,
-        500_000_000,
+        PRICE_RENT,
     );
     let mut tx = Transaction::new_with_payer(&[ix], Some(&payer.pubkey()));
     let bh = banks_client.get_latest_blockhash().await.unwrap();
@@ -515,11 +549,19 @@ fn lock_deposit_ix(
     order_id: &[u8; 16],
     deposit_amount: u64,
     deadline_ts: i64,
+    period: i64,
+    start_date: i64,
+    end_date: i64,
+    price_rent: u64,
 ) -> Instruction {
     let mut data = discriminator("lock_deposit").to_vec();
     data.extend_from_slice(order_id);
     data.extend_from_slice(&deposit_amount.to_le_bytes());
     data.extend_from_slice(&deadline_ts.to_le_bytes());
+    data.extend_from_slice(&period.to_le_bytes());
+    data.extend_from_slice(&start_date.to_le_bytes());
+    data.extend_from_slice(&end_date.to_le_bytes());
+    data.extend_from_slice(&price_rent.to_le_bytes());
 
     Instruction {
         program_id: program_id(),
@@ -664,6 +706,7 @@ async fn activate_escrow(
     order_id: &[u8; 16],
 ) {
     let deposit_amount: u64 = 1_000_000_000;
+    let (period, start_date, end_date) = test_lease_dates();
 
     // lock_deposit
     let ix = lock_deposit_ix(
@@ -674,6 +717,10 @@ async fn activate_escrow(
         order_id,
         deposit_amount,
         deadline_3_days(),
+        period,
+        start_date,
+        end_date,
+        PRICE_RENT,
     );
     let mut tx = Transaction::new_with_payer(&[ix], Some(&payer.pubkey()));
     let bh = banks_client.get_latest_blockhash().await.unwrap();

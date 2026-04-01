@@ -1,6 +1,8 @@
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../features/auth/store'
 import { useWallet } from '@solana/wallet-adapter-react'
+import { useEffect, useState } from 'react'
+import { listProperties } from '../features/properties/api'
 
 interface MenuItemProps {
   icon: React.ReactNode
@@ -35,9 +37,18 @@ function MenuItem({ icon, label, sublabel, danger, chevron = true, onClick }: Me
 const Divider = () => <div style={{ height:1, background:'rgba(255,255,255,0.05)', margin:'4px 0' }}/>
 
 export default function ProfilePage() {
-  const { user, logout } = useAuthStore()
+  const { user, logout, token } = useAuthStore()
   const { disconnect } = useWallet()
   const navigate = useNavigate()
+
+  const [listings, setListings] = useState<any[]>([])
+
+  useEffect(() => {
+    if (!user) return
+    listProperties({ owner: user.id }, token)
+      .then(setListings)
+      .catch(() => setListings([]))
+  }, [user, token])
 
   const handleLogout = () => {
     disconnect()
@@ -47,9 +58,14 @@ export default function ProfilePage() {
 
   if (!user) return null
 
-  const short = user.walletAddress
-    ? user.walletAddress.slice(0, 4) + '…' + user.walletAddress.slice(-4)
+  const short = user.wallet_address
+    ? user.wallet_address.slice(0, 4) + '…' + user.wallet_address.slice(-4)
     : 'Wallet'
+
+  // Dynamic stats
+  const totalListings = listings.length
+  const occupiedCount = listings.filter(l => l.status === 'listed').length
+  const occupancy = totalListings > 0 ? Math.round((occupiedCount / totalListings) * 100) : 0
 
   return (
     <div style={{ padding:'0 20px 100px' }}>
@@ -66,7 +82,7 @@ export default function ProfilePage() {
           {short.slice(0,2).toUpperCase()}
         </div>
         <h1 style={{ fontFamily:"'Syne',sans-serif", fontSize:22, fontWeight:800, marginBottom:4 }}>
-          {user.displayName ?? short}
+          {user.display_name ?? short}
         </h1>
         <p style={{ color:'#6A6A7A', fontSize:13, fontFamily:'monospace' }}>{short}</p>
         <div style={{
@@ -80,13 +96,15 @@ export default function ProfilePage() {
       </div>
 
       {/* Stats */}
-      <div className="fu1" style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginBottom:24 }}>
-        {[{ label:'Properties', value:'12' }, { label:'Balance', value:'$24.8K' }, { label:'Occupancy', value:'92%' }].map(s => (
-          <div key={s.label} style={{ background:'#141416', border:'1px solid rgba(255,255,255,0.07)', borderRadius:16, padding:14, textAlign:'center' }}>
-            <p style={{ fontFamily:"'Syne',sans-serif", fontSize:18, fontWeight:700, marginBottom:4 }}>{s.value}</p>
-            <p style={{ color:'#5A5A6A', fontSize:11 }}>{s.label}</p>
-          </div>
-        ))}
+      <div className="fu1" style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:10, marginBottom:24 }}>
+        <div style={{ background:'#141416', border:'1px solid rgba(255,255,255,0.07)', borderRadius:16, padding:14, textAlign:'center' }}>
+          <p style={{ fontFamily:"'Syne',sans-serif", fontSize:18, fontWeight:700, marginBottom:4 }}>{totalListings}</p>
+          <p style={{ color:'#5A5A6A', fontSize:11 }}>Properties</p>
+        </div>
+        <div style={{ background:'#141416', border:'1px solid rgba(255,255,255,0.07)', borderRadius:16, padding:14, textAlign:'center' }}>
+          <p style={{ fontFamily:"'Syne',sans-serif", fontSize:18, fontWeight:700, marginBottom:4 }}>{occupancy}%</p>
+          <p style={{ color:'#5A5A6A', fontSize:11 }}>Occupancy</p>
+        </div>
       </div>
 
       {/* Account */}
@@ -111,7 +129,7 @@ export default function ProfilePage() {
       <div className="fu4" style={{ background:'#141416', border:'1px solid rgba(255,255,255,0.07)', borderRadius:16, overflow:'hidden', marginBottom:8 }}>
         <MenuItem
           icon={<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#FF4D6A" strokeWidth="1.8"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>}
-          label="Disconnect Wallet" danger chevron={false} onClick={handleLogout}
+          label="Log out" danger chevron={false} onClick={handleLogout}
         />
       </div>
 

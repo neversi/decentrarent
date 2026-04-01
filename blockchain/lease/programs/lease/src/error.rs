@@ -20,4 +20,12 @@ pub enum EscrowError {
     Overflow,
     #[msg("Reason too long (max 200 chars)")]
     ReasonTooLong,
+    #[msg("Invalid end date")]
+    InvalidEndDate,
+    #[msg("Invalid timestamp")]
+    InvalidTimestamp,
+    #[msg("Invalid period")]
+    InvalidPeriod,
+    #[msg("Rent overpaid")]
+    RentOverpaid,
 }
