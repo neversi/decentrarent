@@ -47,7 +47,7 @@ func (h *Handler) GetUploadURL(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"property not found"}`, http.StatusNotFound)
 		return
 	}
-	if p.OwnerWallet != wallet {
+	if p.LandlordID != wallet {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
@@ -88,7 +88,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"property not found"}`, http.StatusNotFound)
 		return
 	}
-	if p.OwnerWallet != wallet {
+	if p.LandlordID != wallet {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
@@ -125,7 +125,7 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"property not found"}`, http.StatusNotFound)
 		return
 	}
-	if p.OwnerWallet != wallet {
+	if p.LandlordID != wallet {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
@@ -158,7 +158,7 @@ func (h *Handler) Reorder(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"property not found"}`, http.StatusNotFound)
 		return
 	}
-	if p.OwnerWallet != wallet {
+	if p.LandlordID != wallet {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}

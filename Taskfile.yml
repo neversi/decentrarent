@@ -61,3 +61,34 @@ tasks:
     desc: Build backend binary
     dir: backend
     cmd: go build ./cmd/server
+
+  backend:docs:
+    desc: Generate Go documentation
+    dir: backend
+    cmd: swag init -g ./main.go -d ./cmd/server,./internal -o ./docs
+
+  backend:migrate:create:
+    desc: Create a new SQL migration pair (use NAME=...)
+    cmds:
+      - mkdir -p backend/migrations
+      - migrate create -ext sql -dir backend/migrations -seq {{.NAME}}
+    requires:
+      vars: [NAME]
+
+  backend:migrate:up:
+    desc: Apply all pending backend SQL migrations
+    cmd: migrate -path backend/migrations -database "${DATABASE_URL:-postgres://decentrarent:decentrarent@localhost:5432/decentrarent?sslmode=disable}" up
+
+  backend:migrate:down:
+    desc: Roll back backend SQL migrations (use STEPS=1 by default)
+    cmd: migrate -path backend/migrations -database "${DATABASE_URL:-postgres://decentrarent:decentrarent@localhost:5432/decentrarent?sslmode=disable}" down ${STEPS:-1}
+
+  backend:migrate:version:
+    desc: Show backend migration version
+    cmd: migrate -path backend/migrations -database "${DATABASE_URL:-postgres://decentrarent:decentrarent@localhost:5432/decentrarent?sslmode=disable}" version
+
+  backend:migrate:force:
+    desc: Force backend migration version (use VERSION=...)
+    cmd: migrate -path backend/migrations -database "${DATABASE_URL:-postgres://decentrarent:decentrarent@localhost:5432/decentrarent?sslmode=disable}" force {{.VERSION}}
+    requires:
+      vars: [VERSION]

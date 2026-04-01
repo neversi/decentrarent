@@ -9,6 +9,46 @@
     "host": "localhost:8080",
     "basePath": "/",
     "paths": {
+        "/auth/login": {
+            "post": {
+                "description": "User login",
+                "tags": [
+                    "auth"
+                ],
+                "summary": "User login",
+                "parameters": [
+                    {
+                        "description": "Login request payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/auth.loginRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/auth.authResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/auth.errorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/auth.errorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/auth/nonce": {
             "get": {
                 "description": "Returns a nonce for wallet signature authentication",
@@ -52,6 +92,40 @@
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/auth.authResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/signup": {
+            "post": {
+                "description": "User signup",
+                "tags": [
+                    "auth"
+                ],
+                "summary": "User signup",
+                "parameters": [
+                    {
+                        "description": "Signup request payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/auth.signupRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/auth.authResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/auth.errorResponse"
                         }
                     }
                 }
@@ -126,16 +200,14 @@
                         }
                     }
                 }
-            }
-        },
-        "/conversations/messages": {
+            },
             "post": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "Sends a message in a conversation",
+                "description": "Creates a new conversation between the authenticated user (loaner) and a landlord for a property, or returns the existing one",
                 "consumes": [
                     "application/json"
                 ],
@@ -145,7 +217,85 @@
                 "tags": [
                     "chat"
                 ],
-                "summary": "Send a message",
+                "summary": "Create or get a conversation",
+                "parameters": [
+                    {
+                        "description": "Conversation details",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/chat.createConversationRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/chat.Conversation"
+                        }
+                    }
+                }
+            }
+        },
+        "/conversations/documents": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Sends a document (agreement PDF, etc.) in a conversation",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chat"
+                ],
+                "summary": "Send a document in chat",
+                "parameters": [
+                    {
+                        "description": "Document details",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/chat.sendDocumentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/chat.Message"
+                        }
+                    }
+                }
+            }
+        },
+        "/conversations/messages": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Sends a text message in a conversation",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chat"
+                ],
+                "summary": "Send a text message",
                 "parameters": [
                     {
                         "description": "Message content",
@@ -174,7 +324,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Returns messages for a conversation with pagination",
+                "description": "Returns messages for a conversation with pagination. Supports all message types: text, system, document, modal.",
                 "produces": [
                     "application/json"
                 ],
@@ -211,6 +361,295 @@
                             "items": {
                                 "$ref": "#/definitions/chat.Message"
                             }
+                        }
+                    }
+                }
+            }
+        },
+        "/orders": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns orders where user is tenant or landlord",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "orders"
+                ],
+                "summary": "List orders for the authenticated user",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Filter by escrow_status",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by property_id",
+                        "name": "property_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by role: tenant, landlord, or all (default all)",
+                        "name": "role",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Limit (default 20, max 100)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Offset for pagination",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/order.Order"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Tenant creates a new rental order. Escrow starts in awaiting_signatures status.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "orders"
+                ],
+                "summary": "Create an order (escrow)",
+                "parameters": [
+                    {
+                        "description": "Order details",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/order.CreateOrderRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/order.Order"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/orders/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns a single order with full details",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "orders"
+                ],
+                "summary": "Get order by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Order ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/order.Order"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/orders/{id}/accept": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "orders"
+                ],
+                "summary": "Accept an order proposal",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Order ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/order.Order"
+                        }
+                    }
+                }
+            }
+        },
+        "/orders/{id}/history": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns the full status transition history",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "orders"
+                ],
+                "summary": "Get status history for an order",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Order ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/order.StatusHistory"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/orders/{id}/payments": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns all rent payments for the given order",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "orders"
+                ],
+                "summary": "Get rent payments for an order",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Order ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/order.RentPayment"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/orders/{id}/reject": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "orders"
+                ],
+                "summary": "Reject an order proposal",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Order ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/order.Order"
                         }
                     }
                 }
@@ -691,6 +1130,25 @@
                 }
             }
         },
+        "auth.errorResponse": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                }
+            }
+        },
+        "auth.loginRequest": {
+            "type": "object",
+            "properties": {
+                "password": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
         "auth.nonceResponse": {
             "type": "object",
             "properties": {
@@ -698,6 +1156,32 @@
                     "type": "string"
                 },
                 "nonce": {
+                    "type": "string"
+                }
+            }
+        },
+        "auth.signupRequest": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "first_name": {
+                    "type": "string"
+                },
+                "last_name": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                },
+                "wallet_address": {
                     "type": "string"
                 }
             }
@@ -725,7 +1209,7 @@
                 "id": {
                     "type": "string"
                 },
-                "landlord_wallet": {
+                "landlord_id": {
                     "type": "string"
                 },
                 "last_message": {
@@ -734,7 +1218,7 @@
                 "last_message_at": {
                     "type": "string"
                 },
-                "loaner_wallet": {
+                "loaner_id": {
                     "type": "string"
                 },
                 "property_id": {
@@ -757,7 +1241,79 @@
                 "id": {
                     "type": "string"
                 },
-                "sender_wallet": {
+                "message_type": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "$ref": "#/definitions/chat.MessageMeta"
+                },
+                "sender_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "chat.MessageMeta": {
+            "type": "object",
+            "properties": {
+                "document_name": {
+                    "type": "string"
+                },
+                "document_url": {
+                    "description": "Для document",
+                    "type": "string"
+                },
+                "event_type": {
+                    "description": "Для system",
+                    "type": "string"
+                },
+                "modal_action": {
+                    "description": "Для modal",
+                    "type": "string"
+                },
+                "modal_id": {
+                    "description": "unique ID для отслеживания ответа",
+                    "type": "string"
+                },
+                "modal_status": {
+                    "description": "pending, accepted, rejected",
+                    "type": "string"
+                },
+                "order_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "chat.createConversationRequest": {
+            "type": "object",
+            "properties": {
+                "landlord_id": {
+                    "type": "string"
+                },
+                "property_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "chat.sendDocumentRequest": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "description": "описание",
+                    "type": "string"
+                },
+                "conversation_id": {
+                    "type": "string"
+                },
+                "document_name": {
+                    "description": "имя файла",
+                    "type": "string"
+                },
+                "document_url": {
+                    "description": "ссылка на файл",
+                    "type": "string"
+                },
+                "order_id": {
+                    "description": "привязка к ордеру",
                     "type": "string"
                 }
             }
@@ -827,6 +1383,158 @@
                     "type": "string"
                 },
                 "upload_url": {
+                    "type": "string"
+                }
+            }
+        },
+        "order.CreateOrderRequest": {
+            "type": "object",
+            "properties": {
+                "conversation_id": {
+                    "type": "string"
+                },
+                "deposit_amount": {
+                    "type": "integer"
+                },
+                "escrow_address": {
+                    "type": "string"
+                },
+                "landlord_id": {
+                    "type": "string"
+                },
+                "property_id": {
+                    "type": "string"
+                },
+                "rent_amount": {
+                    "type": "integer"
+                },
+                "rent_end_date": {
+                    "type": "string"
+                },
+                "rent_start_date": {
+                    "type": "string"
+                },
+                "sign_deadline_days": {
+                    "type": "integer"
+                },
+                "token_mint": {
+                    "type": "string"
+                }
+            }
+        },
+        "order.Order": {
+            "type": "object",
+            "properties": {
+                "conversation_id": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "deposit_amount": {
+                    "type": "integer"
+                },
+                "dispute_reason": {
+                    "type": "string"
+                },
+                "escrow_address": {
+                    "type": "string"
+                },
+                "escrow_status": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "landlord_id": {
+                    "type": "string"
+                },
+                "landlord_signed": {
+                    "type": "boolean"
+                },
+                "property_id": {
+                    "type": "string"
+                },
+                "rent_amount": {
+                    "type": "integer"
+                },
+                "rent_end_date": {
+                    "type": "string"
+                },
+                "rent_start_date": {
+                    "type": "string"
+                },
+                "sign_deadline": {
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "tenant_signed": {
+                    "type": "boolean"
+                },
+                "token_mint": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "order.RentPayment": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "order_id": {
+                    "type": "string"
+                },
+                "paid_by": {
+                    "type": "string"
+                },
+                "period_end": {
+                    "type": "string"
+                },
+                "period_start": {
+                    "type": "string"
+                },
+                "tx_hash": {
+                    "type": "string"
+                }
+            }
+        },
+        "order.StatusHistory": {
+            "type": "object",
+            "properties": {
+                "changed_by": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "from_status": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "order_id": {
+                    "type": "string"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "to_status": {
                     "type": "string"
                 }
             }
@@ -942,7 +1650,22 @@
                 "display_name": {
                     "type": "string"
                 },
+                "email": {
+                    "type": "string"
+                },
+                "first_name": {
+                    "type": "string"
+                },
                 "id": {
+                    "type": "string"
+                },
+                "last_name": {
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string"
+                },
+                "username": {
                     "type": "string"
                 },
                 "wallet_address": {

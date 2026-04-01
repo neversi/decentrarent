@@ -7,6 +7,7 @@ import (
 
 type Config struct {
 	DatabaseURL         string
+	MigrationsPath      string
 	JWTSecret           string
 	CentrifugoKey       string
 	CentrifugoURL       string
@@ -25,6 +26,7 @@ type Config struct {
 func Load() *Config {
 	return &Config{
 		DatabaseURL:         getEnv("DATABASE_URL", "postgres://decentrarent:decentrarent@localhost:5432/decentrarent?sslmode=disable"),
+		MigrationsPath:      getEnv("MIGRATIONS_PATH", "migrations"),
 		JWTSecret:           getEnv("JWT_SECRET", "decentrarent-dev-jwt-secret-change-in-production"),
 		CentrifugoKey:       getEnv("CENTRIFUGO_API_KEY", "api-secret"),
 		CentrifugoURL:       getEnv("CENTRIFUGO_URL", "http://localhost:8000"),

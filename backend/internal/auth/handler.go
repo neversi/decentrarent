@@ -179,6 +179,10 @@ type authResponse struct {
 	User  *user.User `json:"user"`
 }
 
+type errorResponse struct {
+	Error string `json:"error"`
+}
+
 // Verify godoc
 // @Summary Verify wallet signature
 // @Description Verifies wallet signature and returns JWT token
