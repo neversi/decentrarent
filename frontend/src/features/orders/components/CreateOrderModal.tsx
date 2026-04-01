@@ -4,6 +4,8 @@ import { useAuthStore } from '../../auth/store';
 import { useToastStore } from '../../toast/store';
 import type { Conversation } from '../../chat/types';
 import type { Property } from '../../properties/types';
+import { SolIcon } from '../../../components/SolIcon';
+import { toDisplayAmount, toBaseUnits } from '../../../lib/tokenAmount';
 
 interface CreateOrderModalProps {
   conversation: Conversation;
@@ -12,27 +14,25 @@ interface CreateOrderModalProps {
   onCreated: () => void;
 }
 
-const SolIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24">
-    <circle cx="12" cy="12" r="10" fill="#9945FF" />
-    <text x="12" y="16" textAnchor="middle" fill="white" fontSize="12" fontWeight="bold">S</text>
-  </svg>
-);
+
 
 export function CreateOrderModal({ conversation, property, onClose, onCreated }: CreateOrderModalProps) {
   const { token } = useAuthStore();
   const { addToast } = useToastStore();
   const [depositAmount, setDepositAmount] = useState('');
-  const [rentAmount, setRentAmount] = useState(property ? String(property.price) : '');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [tokenMint, setTokenMint] = useState('SOL');
+  const [tokenMint] = useState(property?.token_mint ?? 'SOL');
   const [deadlineDays, setDeadlineDays] = useState('7');
   const [submitting, setSubmitting] = useState(false);
 
+  const rentDisplay = property
+    ? toDisplayAmount(property.price, property.token_mint)
+    : '—';
+
   const handleSubmit = async () => {
-    if (!token || !rentAmount || !depositAmount || !startDate || !endDate) return;
+    if (!token || !depositAmount || !startDate || !endDate || !property) return;
 
     setSubmitting(true);
     try {
@@ -40,8 +40,8 @@ export function CreateOrderModal({ conversation, property, onClose, onCreated }:
         conversation_id: conversation.id,
         property_id: conversation.property_id,
         landlord_id: conversation.landlord_id,
-        deposit_amount: Number(depositAmount),
-        rent_amount: Number(rentAmount),
+        deposit_amount: toBaseUnits(Number(depositAmount), tokenMint),
+        rent_amount: property.price,
         token_mint: tokenMint,
         escrow_address: '',
         rent_start_date: new Date(startDate).toISOString(),
@@ -88,10 +88,9 @@ export function CreateOrderModal({ conversation, property, onClose, onCreated }:
           <div>
             <label style={{ color: '#94a3b8', fontSize: 12, marginBottom: 4, display: 'block' }}>Rent Amount</label>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <input type="number" value={rentAmount} onChange={(e) => setRentAmount(e.target.value)}
-                placeholder="0" style={{ ...inputStyle, flex: 1, width: 'auto' }} />
+              <div style={{ ...inputStyle, flex: 1, width: 'auto', color: '#64748b' }}>{rentDisplay}</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#9945FF', fontWeight: 600, fontSize: 13 }}>
-                <SolIcon /> SOL
+                <SolIcon /> {tokenMint}
               </div>
             </div>
           </div>
@@ -102,7 +101,7 @@ export function CreateOrderModal({ conversation, property, onClose, onCreated }:
               <input type="number" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)}
                 placeholder="0" style={{ ...inputStyle, flex: 1, width: 'auto' }} />
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#9945FF', fontWeight: 600, fontSize: 13 }}>
-                <SolIcon /> SOL
+                <SolIcon /> {tokenMint}
               </div>
             </div>
           </div>
@@ -126,9 +125,7 @@ export function CreateOrderModal({ conversation, property, onClose, onCreated }:
             <>
               <div>
                 <label style={{ color: '#94a3b8', fontSize: 12, marginBottom: 4, display: 'block' }}>Token</label>
-                <select value={tokenMint} onChange={(e) => setTokenMint(e.target.value)} style={inputStyle}>
-                  <option value="SOL">SOL</option>
-                </select>
+                <div style={{ ...inputStyle, color: '#64748b' }}>{tokenMint}</div>
               </div>
               <div>
                 <label style={{ color: '#94a3b8', fontSize: 12, marginBottom: 4, display: 'block' }}>Sign Deadline (days)</label>
@@ -144,7 +141,7 @@ export function CreateOrderModal({ conversation, property, onClose, onCreated }:
             border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 14, cursor: 'pointer',
           }}>Cancel</button>
           <button onClick={handleSubmit}
-            disabled={submitting || !rentAmount || !depositAmount || !startDate || !endDate}
+            disabled={submitting || !depositAmount || !startDate || !endDate}
             style={{
               flex: 1, padding: 10, background: '#E07840', color: '#fff',
               border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer',

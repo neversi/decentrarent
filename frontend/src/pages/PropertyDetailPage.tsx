@@ -44,7 +44,7 @@ export default function PropertyDetailPage() {
   // Contact landlord
   const [contacting, setContacting] = useState(false)
 
-  const isOwner = user && property && user.id === property.owner_wallet
+  const isOwner = user && property && user.id === property.landlord_id
 
   useEffect(() => {
     if (!id) return
@@ -146,7 +146,7 @@ export default function PropertyDetailPage() {
         method: 'POST',
         body: JSON.stringify({
           property_id: property.id,
-          landlord_id: property.owner_wallet,
+          landlord_id: property.landlord_id,
         }),
       }, token)
       navigate('/chat', { state: { conversation: conv } })

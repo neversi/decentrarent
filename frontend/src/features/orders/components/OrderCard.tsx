@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { acceptOrder, rejectOrder } from '../api';
 import { useAuthStore } from '../../auth/store';
 import { useToastStore } from '../../toast/store';
@@ -6,10 +6,14 @@ import { useLockDeposit } from '../../escrow/hooks/useLockDeposit';
 import { useTenantSign } from '../../escrow/hooks/useTenantSign';
 import { useLandlordSign } from '../../escrow/hooks/useLandlordSign';
 import type { Order, OrderStatus } from '../types';
+import type { Property } from '../../properties/types';
+import { SolIcon } from '../../../components/SolIcon';
+import { toDisplayAmount } from '../../../lib/tokenAmount';
 
 interface OrderCardProps {
   order: Order;
   onUpdated: () => void;
+  property?: Property | null;
 }
 
 const SOLSCAN_BASE = 'https://solscan.io/tx';
@@ -42,30 +46,34 @@ const statusLabels: Record<OrderStatus, string> = {
 
 const TERMINAL_STATUSES: OrderStatus[] = ['rejected', 'expired', 'settled', 'dispute_resolved_tenant', 'dispute_resolved_landlord'];
 
+
 const formatDate = (dateStr: string) => {
   const d = new Date(dateStr);
   return d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
 };
 
-const SolIcon = ({ size = 12 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24">
-    <circle cx="12" cy="12" r="10" fill="#9945FF" />
-    <text x="12" y="16" textAnchor="middle" fill="white" fontSize="12" fontWeight="bold">S</text>
-  </svg>
-);
 
-export function OrderCard({ order, onUpdated }: OrderCardProps) {
+export function OrderCard({ order, onUpdated, property }: OrderCardProps) {
   const { token, user } = useAuthStore();
   const { addToast } = useToastStore();
   const { lockDeposit } = useLockDeposit();
   const { tenantSign } = useTenantSign();
   const { landlordSign } = useLandlordSign();
   const [loading, setLoading] = useState(false);
+  const [visible, setVisible] = useState(true);
+  const [fading, setFading] = useState(false);
 
   const currentUserId = user?.id || '';
   const isTenant = currentUserId === order.tenant_id;
   const colors = statusColors[order.escrow_status];
   const isTerminal = TERMINAL_STATUSES.includes(order.escrow_status);
+
+  useEffect(() => {
+    if (!isTerminal) return;
+    const fadeTimer = setTimeout(() => setFading(true), 3500);
+    const hideTimer = setTimeout(() => setVisible(false), 4500);
+    return () => { clearTimeout(fadeTimer); clearTimeout(hideTimer); };
+  }, [isTerminal]);
 
   const handleAccept = async () => {
     if (!token) return;
@@ -131,11 +139,14 @@ export function OrderCard({ order, onUpdated }: OrderCardProps) {
 
   const alreadySigned = isTenant ? order.tenant_signed : order.landlord_signed;
 
+  if (!visible) return null;
+
   return (
     <div style={{
       margin: '16px auto', maxWidth: 380, padding: 16, background: '#141416',
       border: `1px solid ${colors.border}`, borderRadius: 12,
-      opacity: isTerminal ? 0.6 : 1,
+      opacity: fading ? 0 : (isTerminal ? 0.6 : 1),
+      transition: fading ? 'opacity 1s ease' : undefined,
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -151,19 +162,29 @@ export function OrderCard({ order, onUpdated }: OrderCardProps) {
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
           <span>Rent:</span>
           <span style={{ color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: 4 }}>
-            <SolIcon /> {order.rent_amount} SOL
+            <SolIcon /> {toDisplayAmount(order.rent_amount, order.token_mint)} {order.token_mint}
           </span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
           <span>Deposit:</span>
           <span style={{ color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: 4 }}>
-            <SolIcon /> {order.deposit_amount} SOL
+            <SolIcon /> {toDisplayAmount(order.deposit_amount, order.token_mint)} {order.token_mint}
           </span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <span>Period:</span>
-          <span style={{ color: '#e2e8f0' }}>{formatDate(order.rent_start_date)} \u2013 {formatDate(order.rent_end_date)}</span>
+          <span>Start Date:</span>
+          <span style={{ color: '#e2e8f0' }}>{formatDate(order.rent_start_date)}</span>
         </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <span>End Date:</span>
+          <span style={{ color: '#e2e8f0' }}>{formatDate(order.rent_end_date)}</span>
+        </div>
+        {property?.period_type && (
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span>Periodicity:</span>
+            <span style={{ color: '#e2e8f0', textTransform: 'capitalize' }}>{property.period_type}</span>
+          </div>
+        )}
         {order.escrow_address && (
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <span>Escrow:</span>
@@ -194,15 +215,19 @@ export function OrderCard({ order, onUpdated }: OrderCardProps) {
         <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
           {order.escrow_status === 'new' && (
             <>
-              <button onClick={handleAccept} disabled={loading} style={{
-                flex: 1, padding: 8, background: '#3DD68C', color: '#0a0a0f',
-                border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 13, cursor: 'pointer',
+              <button onClick={handleAccept} disabled={loading || alreadySigned} style={{
+                flex: 1, padding: 8, background: alreadySigned ? 'rgba(61,214,140,0.15)' : '#3DD68C',
+                color: alreadySigned ? '#3DD68C' : '#0a0a0f',
+                border: alreadySigned ? '1px solid rgba(61,214,140,0.3)' : 'none',
+                borderRadius: 6, fontWeight: 600, fontSize: 13,
+                cursor: alreadySigned ? 'default' : 'pointer',
                 opacity: loading ? 0.6 : 1,
-              }}>Accept</button>
-              <button onClick={handleReject} disabled={loading} style={{
+              }}>{alreadySigned ? '\u2713 Accepted' : 'Accept'}</button>
+              <button onClick={handleReject} disabled={loading || alreadySigned} style={{
                 flex: 1, padding: 8, background: 'transparent', color: '#FF4D6A',
-                border: '1px solid #FF4D6A', borderRadius: 6, fontWeight: 600, fontSize: 13, cursor: 'pointer',
-                opacity: loading ? 0.6 : 1,
+                border: '1px solid #FF4D6A', borderRadius: 6, fontWeight: 600, fontSize: 13,
+                cursor: alreadySigned ? 'default' : 'pointer',
+                opacity: (loading || alreadySigned) ? 0.4 : 1,
               }}>Reject</button>
             </>
           )}

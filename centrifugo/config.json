@@ -42,9 +42,7 @@
       {
         "name": "orders",
         "allow_subscribe_for_client": true,
-        "allow_publish_for_subscriber": true,
-        "subscribe_proxy_enabled": true,
-        "publish_proxy_enabled": true
+        "allow_publish_for_subscriber": true
       }
     ]
   }

@@ -96,7 +96,7 @@ func main() {
 	verifier := egov.NewMockVerifier()
 	propertyService := property.NewService(propertyStore, verifier)
 	orderCentrifugo := &orderCentrifugoAdapter{apiURL: cfg.CentrifugoURL, apiKey: cfg.CentrifugoKey}
-	orderService := order.NewService(orderStore, kafkaProducer, orderCentrifugo)
+	orderService := order.NewService(orderStore, chatStore, kafkaProducer, orderCentrifugo)
 
 	// ─── Kafka consumers ────────────────────────────────────────────
 	chatConsumers, err := chat.NewChatConsumers(cfg.KafkaBrokers, chatService)

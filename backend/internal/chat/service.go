@@ -16,7 +16,7 @@ func NewService(store *Store, centrifugo *CentrifugoClient) *Service {
 
 // ParseChannel extracts property ID and loaner ID from channel name.
 // Channel format: property:<property_id>:chat:<loaner_id>
-func ParseChannel(channel string) (propertyID, loanerID string, err error) {
+func ParseChannelProperty(channel string) (propertyID, loanerID string, err error) {
 	parts := strings.Split(channel, ":")
 	if len(parts) != 4 || parts[0] != "property" || parts[2] != "chat" {
 		return "", "", fmt.Errorf("invalid channel format: %s", channel)
@@ -24,9 +24,42 @@ func ParseChannel(channel string) (propertyID, loanerID string, err error) {
 	return parts[1], parts[3], nil
 }
 
+func ParseChannelType(channel string) (SubscriptionChannel, error) {
+	if strings.HasPrefix(channel, "property:") {
+		return SubscriptionChannelProperty, nil
+	} else if strings.HasPrefix(channel, "orders:") {
+		return SubscriptionChannelOrder, nil
+	}
+	return "", fmt.Errorf("unknown channel type: %s", channel)
+}
+
+func ParseChannelOrder(channel string) (conversationID string, err error) {
+	parts := strings.Split(channel, ":")
+	if len(parts) != 2 || parts[0] != "orders" {
+		return "", fmt.Errorf("invalid channel format: %s", channel)
+	}
+	return parts[1], nil
+}
+
 // CanSubscribe checks if a user is allowed to subscribe to a channel.
 func (s *Service) CanSubscribe(channel, userID string) error {
-	propertyID, loanerID, err := ParseChannel(channel)
+	channelType, err := ParseChannelType(channel)
+	if err != nil {
+		return err
+	}
+
+	switch channelType {
+	case SubscriptionChannelProperty:
+		return s.canSubscribePropertyChannel(channel, userID)
+	case SubscriptionChannelOrder:
+		return s.canSubscribeOrderChannel(channel, userID)
+	default:
+		return fmt.Errorf("unsupported channel type: %s", channelType)
+	}
+}
+
+func (s *Service) canSubscribePropertyChannel(channel, userID string) error {
+	propertyID, loanerID, err := ParseChannelProperty(channel)
 	if err != nil {
 		return err
 	}
@@ -47,9 +80,27 @@ func (s *Service) CanSubscribe(channel, userID string) error {
 	return fmt.Errorf("not authorized to subscribe to channel %s", channel)
 }
 
+func (s *Service) canSubscribeOrderChannel(channel, userID string) error {
+	conversationID, err := ParseChannelOrder(channel)
+	if err != nil {
+		return err
+	}
+
+	conv, err := s.store.GetConversation(conversationID)
+	if err != nil {
+		return fmt.Errorf("failed to verify subscription: %w", err)
+	}
+
+	if conv.LandlordID == userID || conv.LoanerID == userID {
+		return nil
+	}
+
+	return fmt.Errorf("not authorized to subscribe to channel %s", channel)
+}
+
 // SaveMessage persists a chat message and returns the saved message.
 func (s *Service) SaveMessage(channel, senderID, content string) (*Message, error) {
-	propertyID, loanerID, err := ParseChannel(channel)
+	propertyID, loanerID, err := ParseChannelProperty(channel)
 	if err != nil {
 		return nil, err
 	}

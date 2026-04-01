@@ -53,6 +53,7 @@ type OrderEvent struct {
 	TenantWallet   string    `json:"tenant_wallet"`
 	LandlordWallet string    `json:"landlord_wallet"`
 	DepositAmount  int64     `json:"deposit_amount"`
+	TokenMint      string    `json:"token_mint"`
 	RentAmount     int64     `json:"rent_amount"`
 	EscrowStatus   string    `json:"escrow_status"`
 	Timestamp      time.Time `json:"timestamp"`

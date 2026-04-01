@@ -1,6 +1,6 @@
 export interface Property {
   id: string;
-  owner_wallet: string;
+  landlord_id: string;
   title: string;
   description: string;
   location: string;

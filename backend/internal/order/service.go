@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/abdro/decentrarent/backend/internal/chat"
 	"github.com/abdro/decentrarent/backend/internal/kafka"
 )
 
@@ -30,12 +31,13 @@ type CentrifugoPublisher interface {
 
 type Service struct {
 	store      *Store
+	chatStore  *chat.Store
 	producer   *kafka.Producer
 	centrifugo CentrifugoPublisher
 }
 
-func NewService(store *Store, producer *kafka.Producer, centrifugo CentrifugoPublisher) *Service {
-	return &Service{store: store, producer: producer, centrifugo: centrifugo}
+func NewService(store *Store, chatStore *chat.Store, producer *kafka.Producer, centrifugo CentrifugoPublisher) *Service {
+	return &Service{store: store, chatStore: chatStore, producer: producer, centrifugo: centrifugo}
 }
 
 // ─── CreateOrder ────────────────────────────────────────────────────
@@ -43,6 +45,14 @@ func NewService(store *Store, producer *kafka.Producer, centrifugo CentrifugoPub
 func (s *Service) CreateOrder(callerID string, req *CreateOrderRequest) (*Order, error) {
 	if req.PropertyID == "" || req.LandlordID == "" || req.DepositAmount <= 0 || req.RentAmount <= 0 || req.ConversationID == "" {
 		return nil, ErrMissingFields
+	}
+
+	conv, err := s.chatStore.GetConversation(req.ConversationID)
+	if err != nil {
+		return nil, errors.New("conversation not found")
+	}
+	if conv.PropertyID != req.PropertyID || (conv.LandlordID != callerID && conv.LoanerID != callerID) {
+		return nil, errors.New("conversation does not match order details")
 	}
 
 	rentStart, err := time.Parse(time.RFC3339, req.RentStartDate)
@@ -67,8 +77,8 @@ func (s *Service) CreateOrder(callerID string, req *CreateOrderRequest) (*Order,
 	o := &Order{
 		ConversationID: req.ConversationID,
 		PropertyID:     req.PropertyID,
-		TenantID:       callerID,
-		LandlordID:     req.LandlordID,
+		TenantID:       conv.LoanerID,
+		LandlordID:     conv.LandlordID,
 		CreatedBy:      callerID,
 		DepositAmount:  req.DepositAmount,
 		RentAmount:     req.RentAmount,
@@ -106,12 +116,34 @@ func (s *Service) AcceptOrder(orderID, userID string) (*Order, error) {
 		return nil, ErrForbidden
 	}
 
-	if err := s.store.UpdateStatus(o.ID, StatusAwaitingDeposit, userID, "order accepted"); err != nil {
-		return nil, err
-	}
-	o.EscrowStatus = StatusAwaitingDeposit
+	switch userID {
+	case o.LandlordID:
+		// Landlord accepts the order, waiting for tenant to lock deposit
+		if err := s.store.UpdateLandlordSigned(o.ID, true); err != nil {
+			return nil, err
+		}
+		o.LandlordSigned = true
 
-	s.publishCentrifugoOrderUpdate(o, "order_accepted")
+		s.publishCentrifugoOrderUpdate(o, "order_accepted")
+	case o.TenantID:
+		// Tenant accepts the order, waiting for landlord to accept
+		if err := s.store.UpdateTenantSigned(o.ID, true); err != nil {
+			return nil, err
+		}
+		o.TenantSigned = true
+
+		s.publishCentrifugoOrderUpdate(o, "order_accepted")
+	}
+
+	if o.TenantSigned && o.LandlordSigned {
+		if err := s.store.UpdateStatus(o.ID, StatusAwaitingDeposit, userID, "order signed by both sides"); err != nil {
+			return nil, err
+		}
+		o.EscrowStatus = StatusAwaitingDeposit
+		s.publishCentrifugoOrderUpdate(o, "order_both_accepted")
+
+	}
+
 	return o, nil
 }
 
@@ -167,6 +199,7 @@ func (s *Service) publishOrderEvent(topic string, o *Order) {
 		PropertyID:     o.PropertyID,
 		TenantWallet:   o.TenantID,
 		LandlordWallet: o.LandlordID,
+		TokenMint:      o.TokenMint,
 		DepositAmount:  o.DepositAmount,
 		RentAmount:     o.RentAmount,
 		EscrowStatus:   o.EscrowStatus,

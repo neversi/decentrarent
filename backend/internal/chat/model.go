@@ -2,13 +2,20 @@ package chat
 
 import "time"
 
+type SubscriptionChannel string
+
+const (
+	SubscriptionChannelProperty SubscriptionChannel = "property"
+	SubscriptionChannelOrder    SubscriptionChannel = "orders"
+)
+
 // ─── Message types ──────────────────────────────────────────────────
 
 const (
-	MessageTypeText     = "text"      // обычное текстовое сообщение
-	MessageTypeSystem   = "system"    // системное уведомление
-	MessageTypeDocument = "document"  // договор / документ (PDF и т.д.)
-	MessageTypeModal    = "modal"     // модалка с действиями (принять/отклонить)
+	MessageTypeText     = "text"     // обычное текстовое сообщение
+	MessageTypeSystem   = "system"   // системное уведомление
+	MessageTypeDocument = "document" // договор / документ (PDF и т.д.)
+	MessageTypeModal    = "modal"    // модалка с действиями (принять/отклонить)
 )
 
 // ─── Modal action types ─────────────────────────────────────────────
@@ -22,10 +29,10 @@ const (
 // ─── Modal statuses ─────────────────────────────────────────────────
 
 const (
-	ModalStatusPending  = "pending"   // ожидает действия
-	ModalStatusAccepted = "accepted"  // принято ✅
-	ModalStatusRejected = "rejected"  // отклонено ❌
-	ModalStatusExpired  = "expired"   // истекло
+	ModalStatusPending  = "pending"  // ожидает действия
+	ModalStatusAccepted = "accepted" // принято ✅
+	ModalStatusRejected = "rejected" // отклонено ❌
+	ModalStatusExpired  = "expired"  // истекло
 )
 
 // ─── Entities ───────────────────────────────────────────────────────
@@ -41,13 +48,13 @@ type Conversation struct {
 }
 
 type Message struct {
-	ID             string          `json:"id"`
-	ConversationID string          `json:"conversation_id"`
-	SenderID       string          `json:"sender_id"`
-	Content        string          `json:"content"`
-	MessageType    string          `json:"message_type"`
-	Metadata       *MessageMeta    `json:"metadata,omitempty"`
-	CreatedAt      time.Time       `json:"created_at"`
+	ID             string       `json:"id"`
+	ConversationID string       `json:"conversation_id"`
+	SenderID       string       `json:"sender_id"`
+	Content        string       `json:"content"`
+	MessageType    string       `json:"message_type"`
+	Metadata       *MessageMeta `json:"metadata,omitempty"`
+	CreatedAt      time.Time    `json:"created_at"`
 }
 
 // MessageMeta carries extra data depending on message_type.
