@@ -33,9 +33,6 @@ export function useChat(
 
     sub.on('publication', (ctx) => {
       const msg = ctx.data as Message;
-      // Skip if we already have this message (sent by us via REST)
-      const existing = useChatStore.getState().messages[conversationId] || [];
-      if (existing.some((m) => m.id === msg.id)) return;
 
       if (conversationId === activeConversationId) {
         addMessage(conversationId, msg);
@@ -88,39 +85,13 @@ export function useChat(
     });
   }, [conversationId, token, messages, setMessages]);
 
-  // Send message via REST API, then publish to Centrifugo for real-time
   const sendMessage = useCallback(
     async (content: string) => {
-      if (!conversationId || !token) return;
-
-      // Save to DB via backend
-      const msg = await apiFetch<Message>(
-        '/conversations/messages',
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            conversation_id: conversationId,
-            content,
-          }),
-        },
-        token,
-      );
-
-      // Add to local state immediately
-      addMessage(conversationId, msg);
-      updateConversationLastMessage(conversationId, msg.content, msg.created_at);
-
-      // Publish to Centrifugo for other subscribers
       const client = centrifugoRef.current;
-      if (client && channel) {
-        try {
-          await client.publish(channel, msg);
-        } catch {
-          // Message is saved, real-time delivery failed — other user will get it on reload
-        }
-      }
+      if (!client || !channel || !conversationId) return;
+      await client.publish(channel, { content });
     },
-    [centrifugoRef, channel, conversationId, token, addMessage, updateConversationLastMessage],
+    [centrifugoRef, channel, conversationId],
   );
 
   // Load older messages

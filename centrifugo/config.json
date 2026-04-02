@@ -1,5 +1,11 @@
 {
   "client": {
+    "proxy": {
+      "connect": {
+        "enabled": true,
+        "endpoint": "http://backend:8080/centrifugo/connect"
+      }
+    },
     "token": {
       "hmac_secret_key": "decentrarent-dev-jwt-secret-change-in-production"
     },
@@ -14,6 +20,14 @@
     "key": "api-secret"
   },
   "channel": {
+    "proxy": {
+      "subscribe": {
+        "endpoint": "http://backend:8080/centrifugo/subscribe"
+      },
+      "publish": {
+        "endpoint": "http://backend:8080/centrifugo/publish"
+      }
+    },
     "namespaces": [
       {
         "name": "property",
@@ -21,7 +35,9 @@
         "history_ttl": "720h",
         "allow_subscribe_for_client": true,
         "allow_publish_for_subscriber": true,
-        "force_recovery": true
+        "force_recovery": true,
+        "subscribe_proxy_enabled": true,
+        "publish_proxy_enabled": true
       },
       {
         "name": "orders",

@@ -1,11 +1,16 @@
+import { useState } from 'react';
 import type { Order, OrderStatus } from '../types';
+import type { Property } from '../../properties/types';
+import { OrderCard } from './OrderCard';
+import { SolIcon } from '../../../components/SolIcon';
+import { toDisplayAmount } from '../../../lib/tokenAmount';
 
 interface OrdersPanelProps {
   orders: Order[];
+  property?: Property | null;
+  onUpdated: () => void;
   onClose: () => void;
 }
-
-const SOLSCAN_BASE = 'https://solscan.io/tx';
 
 const statusLabels: Record<OrderStatus, string> = {
   new: 'NEW',
@@ -35,89 +40,94 @@ const formatDate = (dateStr: string) => {
   return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
 };
 
-export function OrdersPanel({ orders, onClose }: OrdersPanelProps) {
+export function OrdersPanel({ orders, property, onUpdated, onClose }: OrdersPanelProps) {
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const activeOrders = orders.filter((o) => !TERMINAL_STATUSES.includes(o.escrow_status));
 
   return (
-    <div style={{
-      width: 260, background: '#111118', borderLeft: '1px solid rgba(255,255,255,0.07)',
-      padding: 16, overflowY: 'auto', flexShrink: 0,
-    }}>
+    <>
       <div style={{
-        color: '#E07840', fontWeight: 600, fontSize: 13, marginBottom: 16,
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        width: 260, background: '#111118', borderLeft: '1px solid rgba(255,255,255,0.07)',
+        padding: 16, overflowY: 'auto', flexShrink: 0,
       }}>
-        <span>Orders</span>
-        <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: 16 }}>
-          {'\u00D7'}
-        </button>
-      </div>
-
-      {orders.length === 0 ? (
-        <div style={{ color: '#6A6A7A', fontSize: 13, textAlign: 'center', padding: 20 }}>
-          No orders yet
+        <div style={{
+          color: '#E07840', fontWeight: 600, fontSize: 13, marginBottom: 16,
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        }}>
+          <span>Orders</span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: 16 }}>
+            {'\u00D7'}
+          </button>
         </div>
-      ) : (
-        <>
-          {orders.map((order, idx) => {
-            const color = statusColor(order.escrow_status);
-            const terminal = TERMINAL_STATUSES.includes(order.escrow_status);
-            return (
-              <div key={order.id} style={{
-                padding: 12, background: '#141416', borderRadius: 8,
-                border: `1px solid ${terminal ? 'rgba(255,255,255,0.05)' : color + '33'}`,
-                marginBottom: 10, opacity: terminal ? 0.6 : 1,
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <span style={{ color: '#e2e8f0', fontSize: 12, fontWeight: 600 }}>Order #{orders.length - idx}</span>
-                  <span style={{ color, fontSize: 10, fontWeight: 600 }}>{statusLabels[order.escrow_status]}</span>
-                </div>
-                <div style={{ color: '#94a3b8', fontSize: 11, lineHeight: 1.6 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <svg width="10" height="10" viewBox="0 0 24 24">
-                      <circle cx="12" cy="12" r="10" fill="#9945FF" />
-                      <text x="12" y="16" textAnchor="middle" fill="white" fontSize="12" fontWeight="bold">S</text>
-                    </svg>
-                    {order.rent_amount} SOL {'\u00B7'} {order.deposit_amount} SOL deposit
-                  </div>
-                  <div>{formatDate(order.rent_start_date)} \u2013 {formatDate(order.rent_end_date)}</div>
-                  {order.escrow_address && (
-                    <a
-                      href={`${SOLSCAN_BASE}/${order.escrow_address}?cluster=devnet`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{ color: '#9945FF', textDecoration: 'none', fontSize: 10 }}
-                    >
-                      Solscan {'\u2197'}
-                    </a>
-                  )}
-                  {order.escrow_status === 'awaiting_signatures' && (
-                    <div style={{ marginTop: 4 }}>
-                      <span style={{ color: order.tenant_signed ? '#3DD68C' : '#E07840', fontSize: 10 }}>
-                        {order.tenant_signed ? '\u2713' : '\u25CB'} Tenant
-                      </span>
-                      <span style={{ marginLeft: 6, color: order.landlord_signed ? '#3DD68C' : '#E07840', fontSize: 10 }}>
-                        {order.landlord_signed ? '\u2713' : '\u25CB'} Landlord
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
 
-          <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.07)' }}>
-            <div style={{ color: '#94a3b8', fontSize: 11 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                <span>Total orders:</span><span style={{ color: '#e2e8f0' }}>{orders.length}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>Active:</span><span style={{ color: '#3DD68C' }}>{activeOrders.length} in progress</span>
+        {orders.length === 0 ? (
+          <div style={{ color: '#6A6A7A', fontSize: 13, textAlign: 'center', padding: 20 }}>
+            No orders yet
+          </div>
+        ) : (
+          <>
+            {orders.map((order, idx) => {
+              const color = statusColor(order.escrow_status);
+              const terminal = TERMINAL_STATUSES.includes(order.escrow_status);
+              return (
+                <button
+                  key={order.id}
+                  onClick={() => setSelectedOrder(order)}
+                  style={{
+                    width: '100%', textAlign: 'left', padding: 12, background: '#141416',
+                    borderRadius: 8, border: `1px solid ${terminal ? 'rgba(255,255,255,0.05)' : color + '33'}`,
+                    marginBottom: 10, opacity: terminal ? 0.6 : 1, cursor: 'pointer',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <span style={{ color: '#e2e8f0', fontSize: 12, fontWeight: 600 }}>Order #{orders.length - idx}</span>
+                    <span style={{ color, fontSize: 10, fontWeight: 600 }}>{statusLabels[order.escrow_status]}</span>
+                  </div>
+                  <div style={{ color: '#94a3b8', fontSize: 11, lineHeight: 1.6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <SolIcon size={10} />
+                      {toDisplayAmount(order.rent_amount, order.token_mint)} {order.token_mint}
+                      {' · '}
+                      {toDisplayAmount(order.deposit_amount, order.token_mint)} {order.token_mint} deposit
+                    </div>
+                    <div>{formatDate(order.rent_start_date)} – {formatDate(order.rent_end_date)}</div>
+                  </div>
+                </button>
+              );
+            })}
+
+            <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+              <div style={{ color: '#94a3b8', fontSize: 11 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <span>Total orders:</span><span style={{ color: '#e2e8f0' }}>{orders.length}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Active:</span><span style={{ color: '#3DD68C' }}>{activeOrders.length} in progress</span>
+                </div>
               </div>
             </div>
+          </>
+        )}
+      </div>
+
+      {selectedOrder && (
+        <div
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center',
+            justifyContent: 'center', zIndex: 2000,
+          }}
+          onClick={() => setSelectedOrder(null)}
+        >
+          <div onClick={(e) => e.stopPropagation()}>
+            <OrderCard
+              order={selectedOrder}
+              property={property}
+              onUpdated={() => { setSelectedOrder(null); onUpdated(); }}
+            />
           </div>
-        </>
+        </div>
       )}
-    </div>
+    </>
   );
 }

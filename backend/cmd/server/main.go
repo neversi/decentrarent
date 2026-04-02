@@ -20,6 +20,7 @@ import (
 	"github.com/abdro/decentrarent/backend/internal/auth"
 	"github.com/abdro/decentrarent/backend/internal/chat"
 	"github.com/abdro/decentrarent/backend/internal/config"
+	"github.com/abdro/decentrarent/backend/internal/dbmigrate"
 	"github.com/abdro/decentrarent/backend/internal/egov"
 	kafkapkg "github.com/abdro/decentrarent/backend/internal/kafka"
 	"github.com/abdro/decentrarent/backend/internal/media"
@@ -54,6 +55,10 @@ func main() {
 		log.Fatalf("Failed to ping database: %v", err)
 	}
 	log.Println("Connected to database")
+	if err := dbmigrate.Up(cfg.DatabaseURL, cfg.MigrationsPath); err != nil {
+		log.Fatalf("Failed to run database migrations: %v", err)
+	}
+	log.Println("Database migrations applied")
 
 	// ─── Kafka producer ─────────────────────────────────────────────
 	kafkaProducer, err := kafkapkg.NewProducer(cfg.KafkaBrokers)
@@ -72,29 +77,10 @@ func main() {
 
 	// ─── Stores ─────────────────────────────────────────────────────
 	userStore := user.NewStore(db)
-	if err := userStore.Migrate(); err != nil {
-		log.Fatalf("Failed to run user migrations: %v", err)
-	}
-
 	chatStore := chat.NewStore(db)
-	if err := chatStore.Migrate(); err != nil {
-		log.Fatalf("Failed to run chat migrations: %v", err)
-	}
-
 	propertyStore := property.NewStore(db)
-	if err := propertyStore.Migrate(); err != nil {
-		log.Fatalf("Failed to run property migrations: %v", err)
-	}
-
 	mediaStore := media.NewStore(db)
-	if err := mediaStore.Migrate(); err != nil {
-		log.Fatalf("Failed to run media migrations: %v", err)
-	}
-
 	orderStore := order.NewStore(db)
-	if err := orderStore.Migrate(); err != nil {
-		log.Fatalf("Failed to run order migrations: %v", err)
-	}
 
 	// S3 client
 	s3Client, err := media.NewS3Client(cfg.MinioEndpoint, cfg.MinioPublicEndpoint, cfg.MinioAccessKey, cfg.MinioSecretKey, cfg.MinioBucket, cfg.MinioUseSSL)
@@ -110,7 +96,7 @@ func main() {
 	verifier := egov.NewMockVerifier()
 	propertyService := property.NewService(propertyStore, verifier)
 	orderCentrifugo := &orderCentrifugoAdapter{apiURL: cfg.CentrifugoURL, apiKey: cfg.CentrifugoKey}
-	orderService := order.NewService(orderStore, kafkaProducer, orderCentrifugo)
+	orderService := order.NewService(orderStore, chatStore, kafkaProducer, orderCentrifugo)
 
 	// ─── Kafka consumers ────────────────────────────────────────────
 	chatConsumers, err := chat.NewChatConsumers(cfg.KafkaBrokers, chatService)
@@ -150,6 +136,7 @@ func main() {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	r.Use(middleware.RequestID)
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"http://localhost:5173"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
@@ -194,10 +181,7 @@ func main() {
 		r.Post("/conversations", chatHandler.CreateConversation)
 		r.Delete("/conversations/{id}", chatHandler.DeleteConversation)
 		r.Get("/conversations/{id}/messages", chatHandler.GetMessages)
-		r.Post("/conversations/messages", chatHandler.SendMessage)
 		r.Post("/conversations/documents", chatHandler.SendDocument)
-		r.Post("/conversations/modals/respond", chatHandler.RespondToModal)
-		r.Post("/dev/seed-chat", chatHandler.SeedChat)
 
 		// Properties (owner actions)
 		r.Post("/properties", propertyHandler.Create)
@@ -217,11 +201,6 @@ func main() {
 		r.Get("/orders/{id}", orderHandler.Get)
 		r.Post("/orders/{id}/accept", orderHandler.Accept)
 		r.Post("/orders/{id}/reject", orderHandler.Reject)
-		r.Post("/orders/{id}/sign", orderHandler.Sign)
-		r.Post("/orders/{id}/settle", orderHandler.Settle)
-		r.Post("/orders/{id}/dispute", orderHandler.OpenDispute)
-		r.Post("/orders/{id}/resolve", orderHandler.ResolveDispute)
-		r.Post("/orders/{id}/pay-rent", orderHandler.PayRent)
 		r.Get("/orders/{id}/payments", orderHandler.GetPayments)
 		r.Get("/orders/{id}/history", orderHandler.GetHistory)
 	})

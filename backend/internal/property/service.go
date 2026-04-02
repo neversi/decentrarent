@@ -11,10 +11,10 @@ func NewService(store *Store, verifier egov.Verifier) *Service {
 	return &Service{store: store, verifier: verifier}
 }
 
-func (s *Service) CreateProperty(ownerWallet string, req *CreatePropertyRequest) (*Property, error) {
-	result, err := s.verifier.Verify(req.Location, ownerWallet)
+func (s *Service) CreateProperty(landlordID string, req *CreatePropertyRequest) (*Property, error) {
+	result, err := s.verifier.Verify(req.Location, landlordID)
 	if err != nil {
 		return nil, err
 	}
-	return s.store.Create(ownerWallet, req, result.Status)
+	return s.store.Create(landlordID, req, result.Status)
 }

@@ -93,7 +93,7 @@ export function ChatWindow() {
     channel,
   );
 
-  const { orders, loadOrders } = useOrderUpdates(centrifugoRef, activeConv?.id || null);
+  const { orders, chatOrders, loadOrders } = useOrderUpdates(centrifugoRef, activeConv?.id || null);
 
   useEffect(() => {
     if (!selectedConversation) return;
@@ -340,8 +340,8 @@ export function ChatWindow() {
                 currentUserId={currentUserId}
                 onLoadMore={loadMore}
               />
-              {orders.map((order) => (
-                <OrderCard key={order.id} order={order} onUpdated={loadOrders} />
+              {chatOrders.map((order) => (
+                <OrderCard key={order.id} order={order} onUpdated={loadOrders} property={property} />
               ))}
             </div>
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, padding: '12px 12px 16px' }}>
@@ -352,7 +352,7 @@ export function ChatWindow() {
             </div>
           </div>
           {showOrdersPanel && (
-            <OrdersPanel orders={orders} onClose={() => setShowOrdersPanel(false)} />
+            <OrdersPanel orders={orders} property={property} onUpdated={loadOrders} onClose={() => setShowOrdersPanel(false)} />
           )}
         </div>
 
@@ -365,6 +365,7 @@ export function ChatWindow() {
             onCreated={loadOrders}
           />
         )}
+
       </div>
     );
   }

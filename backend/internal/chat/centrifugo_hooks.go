@@ -66,7 +66,9 @@ type publishMessage struct {
 	Content string `json:"content"`
 }
 
-type publishResult struct{}
+type publishResult struct {
+	Data json.RawMessage `json:"data,omitempty"`
+}
 
 type publishResponse struct {
 	Result *publishResult `json:"result,omitempty"`
@@ -133,12 +135,19 @@ func (h *CentrifugoHandler) Publish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := h.chatService.SaveMessage(req.Channel, req.User, msg.Content); err != nil {
+	savedMsg, err := h.chatService.SaveMessage(req.Channel, req.User, msg.Content)
+	if err != nil {
 		writeJSON(w, publishResponse{Error: &proxyError{Code: 500, Message: "failed to save message"}})
 		return
 	}
 
-	writeJSON(w, publishResponse{Result: &publishResult{}})
+	msgJSON, err := json.Marshal(savedMsg)
+	if err != nil {
+		writeJSON(w, publishResponse{Error: &proxyError{Code: 500, Message: "internal error"}})
+		return
+	}
+
+	writeJSON(w, publishResponse{Result: &publishResult{Data: msgJSON}})
 }
 
 func writeJSON(w http.ResponseWriter, v interface{}) {

@@ -4,7 +4,7 @@ import "time"
 
 type Property struct {
 	ID                 string    `json:"id"`
-	OwnerWallet        string    `json:"owner_wallet"`
+	LandlordID         string    `json:"landlord_id"`
 	Title              string    `json:"title"`
 	Description        string    `json:"description"`
 	Location           string    `json:"location"`
@@ -41,7 +41,7 @@ type StatusRequest struct {
 
 type ListFilter struct {
 	Status     string
-	Owner      string
+	LandlordID string
 	TokenMint  string
 	PeriodType string
 	Limit      int

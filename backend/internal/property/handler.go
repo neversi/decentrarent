@@ -91,7 +91,8 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 // @Tags properties
 // @Produce json
 // @Param status query string false "Filter by status (listed, unlisted, rented)"
-// @Param owner query string false "Filter by owner wallet"
+// @Param landlord_id query string false "Filter by landlord user id"
+// @Param owner query string false "Deprecated alias of landlord_id"
 // @Param token_mint query string false "Filter by token mint (SOL, USDC, USDT)"
 // @Param period_type query string false "Filter by period type (hour, day, month)"
 // @Param limit query int false "Limit results (default 20, max 100)"
@@ -100,6 +101,11 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 // @Router /properties [get]
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
+	landlordID := q.Get("landlord_id")
+	if landlordID == "" {
+		landlordID = q.Get("owner")
+	}
+
 	limit := 20
 	if l := q.Get("limit"); l != "" {
 		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= 100 {
@@ -115,7 +121,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 
 	filter := &ListFilter{
 		Status:     q.Get("status"),
-		Owner:      q.Get("owner"),
+		LandlordID: landlordID,
 		TokenMint:  q.Get("token_mint"),
 		PeriodType: q.Get("period_type"),
 		Limit:      limit,
@@ -123,7 +129,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Default to listed for public queries
-	if filter.Status == "" && filter.Owner == "" {
+	if filter.Status == "" && filter.LandlordID == "" {
 		filter.Status = "available"
 	}
 
@@ -188,7 +194,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"property not found"}`, http.StatusNotFound)
 		return
 	}
-	if p.OwnerWallet != userID {
+	if p.LandlordID != userID {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
@@ -229,7 +235,7 @@ func (h *Handler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"property not found"}`, http.StatusNotFound)
 		return
 	}
-	if p.OwnerWallet != userID {
+	if p.LandlordID != userID {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
@@ -273,7 +279,7 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"property not found"}`, http.StatusNotFound)
 		return
 	}
-	if p.OwnerWallet != userID {
+	if p.LandlordID != userID {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}

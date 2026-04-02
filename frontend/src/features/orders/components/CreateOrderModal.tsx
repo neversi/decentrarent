@@ -5,6 +5,8 @@ import { useToastStore } from '../../toast/store';
 import { TOKEN_INFO } from '../../properties/utils';
 import type { Conversation } from '../../chat/types';
 import type { Property } from '../../properties/types';
+import { SolIcon } from '../../../components/SolIcon';
+import { toDisplayAmount, toBaseUnits } from '../../../lib/tokenAmount';
 
 interface CreateOrderModalProps {
   conversation: Conversation;
@@ -59,7 +61,7 @@ export function CreateOrderModal({ conversation, property, onClose, onCreated }:
   };
 
   const handleSubmit = async () => {
-    if (!token || !rentAmount || !depositAmount || !startDate || !endDate) return;
+    if (!token || !depositAmount || !startDate || !endDate || !property) return;
 
     setSubmitting(true);
     try {
@@ -67,8 +69,8 @@ export function CreateOrderModal({ conversation, property, onClose, onCreated }:
         conversation_id: conversation.id,
         property_id: conversation.property_id,
         landlord_id: conversation.landlord_id,
-        deposit_amount: Number(depositAmount),
-        rent_amount: Number(rentAmount),
+        deposit_amount: toBaseUnits(Number(depositAmount), tokenMint),
+        rent_amount: property.price,
         token_mint: tokenMint,
         escrow_address: '',
         rent_start_date: startDate.toISOString(),

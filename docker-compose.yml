@@ -1,5 +1,6 @@
 services:
   frontend:
+    container_name: frontend
     build:
       context: ./frontend
       dockerfile: Dockerfile
@@ -30,6 +31,7 @@ services:
   #     - "host.docker.internal:host-gateway"
 
   backend:
+    container_name: backend
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -47,7 +49,7 @@ services:
       - MINIO_SECRET_KEY=decentrarent
       - MINIO_BUCKET=decentrarent-media
       - MINIO_USE_SSL=false
-      - KAFKA_BROKERS=kafka:29092
+      - KAFKA_BROKERS=kafka:9092
     depends_on:
       db:
         condition: service_healthy
@@ -60,9 +62,10 @@ services:
       interval: 5s
       timeout: 5s
       retries: 30
-      start_period: 30s
+      start_period: 10s
 
   centrifugo:
+    container_name: centrifugo
     image: centrifugo/centrifugo:v6.7
     ports:
       - "8000:8000"
@@ -74,6 +77,7 @@ services:
         condition: service_healthy
 
   db:
+    container_name: db
     image: postgres:16-alpine
     ports:
       - "5432:5432"
@@ -90,6 +94,7 @@ services:
       retries: 5
 
   minio:
+    container_name: minio
     image: minio/minio
     ports:
       - "9000:9000"
@@ -106,49 +111,44 @@ services:
       timeout: 5s
       retries: 5
 
-  zookeeper:
-    image: confluentinc/cp-zookeeper:7.5.0
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
-    volumes:
-      - zookeeper-data:/var/lib/zookeeper/data
-    healthcheck:
-      test: ["CMD", "echo", "ruok", "|", "nc", "localhost", "2181"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   kafka:
-    image: confluentinc/cp-kafka:7.5.0
+    image: confluentinc/cp-kafka:7.8.0
+    hostname: kafka
+    container_name: kafka
     ports:
       - "9092:9092"
+      - "9093:9093"
     environment:
+      KAFKA_NODE_ID: 1
       KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:9093'
+      KAFKA_LISTENERS: 'PLAINTEXT://kafka:9092,CONTROLLER://kafka:9093'
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka:9092'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT'
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+      KAFKA_MIN_INSYNC_REPLICAS: 1
+      CLUSTER_ID: 'EmptNWtoR4GGWx-BH6nGLQ'
     volumes:
       - kafka-data:/var/lib/kafka/data
-    depends_on:
-      - zookeeper
     healthcheck:
-      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      test: ["CMD-SHELL", "cub kafka-ready -b kafka:9092 1 20 || exit 1"]
       interval: 10s
       timeout: 10s
       retries: 10
 
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
+    container_name: kafka-cluster-ui
     ports:
-      - "8090:8080"
+      - "8088:8080"
     environment:
-      KAFKA_CLUSTERS_0_NAME: decentrarent
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
-      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
     depends_on:
       - kafka
 

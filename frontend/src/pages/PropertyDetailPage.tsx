@@ -167,7 +167,7 @@ export default function PropertyDetailPage() {
         method: 'POST',
         body: JSON.stringify({
           property_id: property.id,
-          landlord_id: property.owner_wallet,
+          landlord_id: property.landlord_id,
         }),
       }, token)
       navigate('/chat', { state: { conversation: conv } })

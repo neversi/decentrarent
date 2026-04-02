@@ -7,11 +7,40 @@ definitions:
       user:
         $ref: '#/definitions/user.User'
     type: object
+  auth.errorResponse:
+    properties:
+      error:
+        type: string
+    type: object
+  auth.loginRequest:
+    properties:
+      password:
+        type: string
+      username:
+        type: string
+    type: object
   auth.nonceResponse:
     properties:
       message:
         type: string
       nonce:
+        type: string
+    type: object
+  auth.signupRequest:
+    properties:
+      email:
+        type: string
+      first_name:
+        type: string
+      last_name:
+        type: string
+      password:
+        type: string
+      phone:
+        type: string
+      username:
+        type: string
+      wallet_address:
         type: string
     type: object
   auth.verifyRequest:
@@ -29,13 +58,13 @@ definitions:
         type: string
       id:
         type: string
-      landlord_wallet:
+      landlord_id:
         type: string
       last_message:
         type: string
       last_message_at:
         type: string
-      loaner_wallet:
+      loaner_id:
         type: string
       property_id:
         type: string
@@ -50,7 +79,57 @@ definitions:
         type: string
       id:
         type: string
-      sender_wallet:
+      message_type:
+        type: string
+      metadata:
+        $ref: '#/definitions/chat.MessageMeta'
+      sender_id:
+        type: string
+    type: object
+  chat.MessageMeta:
+    properties:
+      document_name:
+        type: string
+      document_url:
+        description: Для document
+        type: string
+      event_type:
+        description: Для system
+        type: string
+      modal_action:
+        description: Для modal
+        type: string
+      modal_id:
+        description: unique ID для отслеживания ответа
+        type: string
+      modal_status:
+        description: pending, accepted, rejected
+        type: string
+      order_id:
+        type: string
+    type: object
+  chat.createConversationRequest:
+    properties:
+      landlord_id:
+        type: string
+      property_id:
+        type: string
+    type: object
+  chat.sendDocumentRequest:
+    properties:
+      content:
+        description: описание
+        type: string
+      conversation_id:
+        type: string
+      document_name:
+        description: имя файла
+        type: string
+      document_url:
+        description: ссылка на файл
+        type: string
+      order_id:
+        description: привязка к ордеру
         type: string
     type: object
   chat.sendMessageRequest:
@@ -95,6 +174,106 @@ definitions:
       file_key:
         type: string
       upload_url:
+        type: string
+    type: object
+  order.CreateOrderRequest:
+    properties:
+      conversation_id:
+        type: string
+      deposit_amount:
+        type: integer
+      escrow_address:
+        type: string
+      landlord_id:
+        type: string
+      property_id:
+        type: string
+      rent_amount:
+        type: integer
+      rent_end_date:
+        type: string
+      rent_start_date:
+        type: string
+      sign_deadline_days:
+        type: integer
+      token_mint:
+        type: string
+    type: object
+  order.Order:
+    properties:
+      conversation_id:
+        type: string
+      created_at:
+        type: string
+      created_by:
+        type: string
+      deposit_amount:
+        type: integer
+      dispute_reason:
+        type: string
+      escrow_address:
+        type: string
+      escrow_status:
+        type: string
+      id:
+        type: string
+      landlord_id:
+        type: string
+      landlord_signed:
+        type: boolean
+      property_id:
+        type: string
+      rent_amount:
+        type: integer
+      rent_end_date:
+        type: string
+      rent_start_date:
+        type: string
+      sign_deadline:
+        type: string
+      tenant_id:
+        type: string
+      tenant_signed:
+        type: boolean
+      token_mint:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  order.RentPayment:
+    properties:
+      amount:
+        type: integer
+      created_at:
+        type: string
+      id:
+        type: string
+      order_id:
+        type: string
+      paid_by:
+        type: string
+      period_end:
+        type: string
+      period_start:
+        type: string
+      tx_hash:
+        type: string
+    type: object
+  order.StatusHistory:
+    properties:
+      changed_by:
+        type: string
+      created_at:
+        type: string
+      from_status:
+        type: string
+      id:
+        type: string
+      order_id:
+        type: string
+      reason:
+        type: string
+      to_status:
         type: string
     type: object
   property.CreatePropertyRequest:
@@ -170,7 +349,17 @@ definitions:
         type: string
       display_name:
         type: string
+      email:
+        type: string
+      first_name:
+        type: string
       id:
+        type: string
+      last_name:
+        type: string
+      phone:
+        type: string
+      username:
         type: string
       wallet_address:
         type: string
@@ -182,6 +371,32 @@ info:
   title: DecentraRent API
   version: "1.0"
 paths:
+  /auth/login:
+    post:
+      description: User login
+      parameters:
+      - description: Login request payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.loginRequest'
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/auth.authResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/auth.errorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/auth.errorResponse'
+      summary: User login
+      tags:
+      - auth
   /auth/nonce:
     get:
       description: Returns a nonce for wallet signature authentication
@@ -210,6 +425,28 @@ paths:
       security:
       - BearerAuth: []
       summary: Refresh JWT token
+      tags:
+      - auth
+  /auth/signup:
+    post:
+      description: User signup
+      parameters:
+      - description: Signup request payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.signupRequest'
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/auth.authResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/auth.errorResponse'
+      summary: User signup
       tags:
       - auth
   /auth/verify:
@@ -257,9 +494,34 @@ paths:
       summary: List conversations
       tags:
       - chat
+    post:
+      consumes:
+      - application/json
+      description: Creates a new conversation between the authenticated user (loaner)
+        and a landlord for a property, or returns the existing one
+      parameters:
+      - description: Conversation details
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/chat.createConversationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/chat.Conversation'
+      security:
+      - BearerAuth: []
+      summary: Create or get a conversation
+      tags:
+      - chat
   /conversations/{id}/messages:
     get:
-      description: Returns messages for a conversation with pagination
+      description: 'Returns messages for a conversation with pagination. Supports
+        all message types: text, system, document, modal.'
       parameters:
       - description: Conversation ID
         in: path
@@ -288,11 +550,35 @@ paths:
       summary: Get messages
       tags:
       - chat
+  /conversations/documents:
+    post:
+      consumes:
+      - application/json
+      description: Sends a document (agreement PDF, etc.) in a conversation
+      parameters:
+      - description: Document details
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/chat.sendDocumentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/chat.Message'
+      security:
+      - BearerAuth: []
+      summary: Send a document in chat
+      tags:
+      - chat
   /conversations/messages:
     post:
       consumes:
       - application/json
-      description: Sends a message in a conversation
+      description: Sends a text message in a conversation
       parameters:
       - description: Message content
         in: body
@@ -309,9 +595,190 @@ paths:
             $ref: '#/definitions/chat.Message'
       security:
       - BearerAuth: []
-      summary: Send a message
+      summary: Send a text message
       tags:
       - chat
+  /orders:
+    get:
+      description: Returns orders where user is tenant or landlord
+      parameters:
+      - description: Filter by escrow_status
+        in: query
+        name: status
+        type: string
+      - description: Filter by property_id
+        in: query
+        name: property_id
+        type: string
+      - description: 'Filter by role: tenant, landlord, or all (default all)'
+        in: query
+        name: role
+        type: string
+      - description: Limit (default 20, max 100)
+        in: query
+        name: limit
+        type: integer
+      - description: Offset for pagination
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/order.Order'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List orders for the authenticated user
+      tags:
+      - orders
+    post:
+      consumes:
+      - application/json
+      description: Tenant creates a new rental order. Escrow starts in awaiting_signatures
+        status.
+      parameters:
+      - description: Order details
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/order.CreateOrderRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/order.Order'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create an order (escrow)
+      tags:
+      - orders
+  /orders/{id}:
+    get:
+      description: Returns a single order with full details
+      parameters:
+      - description: Order ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/order.Order'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get order by ID
+      tags:
+      - orders
+  /orders/{id}/accept:
+    post:
+      parameters:
+      - description: Order ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/order.Order'
+      security:
+      - BearerAuth: []
+      summary: Accept an order proposal
+      tags:
+      - orders
+  /orders/{id}/history:
+    get:
+      description: Returns the full status transition history
+      parameters:
+      - description: Order ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/order.StatusHistory'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: Get status history for an order
+      tags:
+      - orders
+  /orders/{id}/payments:
+    get:
+      description: Returns all rent payments for the given order
+      parameters:
+      - description: Order ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/order.RentPayment'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: Get rent payments for an order
+      tags:
+      - orders
+  /orders/{id}/reject:
+    post:
+      parameters:
+      - description: Order ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/order.Order'
+      security:
+      - BearerAuth: []
+      summary: Reject an order proposal
+      tags:
+      - orders
   /properties:
     get:
       description: Returns a filtered list of properties with media

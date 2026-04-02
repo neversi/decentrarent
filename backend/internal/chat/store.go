@@ -17,49 +17,6 @@ func NewStore(db *sql.DB) *Store {
 	return &Store{db: db}
 }
 
-func (s *Store) Migrate() error {
-	queries := []string{
-		`CREATE TABLE IF NOT EXISTS conversations (
-			id TEXT PRIMARY KEY,
-			property_id TEXT NOT NULL,
-			landlord_id TEXT NOT NULL,
-			loaner_id TEXT NOT NULL,
-			last_message TEXT,
-			last_message_at TIMESTAMP,
-			created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-			UNIQUE(property_id, loaner_id)
-		)`,
-		`CREATE TABLE IF NOT EXISTS messages (
-			id TEXT PRIMARY KEY,
-			conversation_id TEXT NOT NULL REFERENCES conversations(id),
-			sender_id TEXT NOT NULL,
-			content TEXT NOT NULL,
-			message_type TEXT NOT NULL DEFAULT 'text',
-			metadata JSONB,
-			created_at TIMESTAMP NOT NULL DEFAULT NOW()
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_messages_conversation_created
-			ON messages(conversation_id, created_at DESC)`,
-		`CREATE INDEX IF NOT EXISTS idx_conversations_users
-			ON conversations(landlord_id, loaner_id)`,
-		// Add columns to existing tables (idempotent)
-		`DO $$ BEGIN
-			ALTER TABLE messages ADD COLUMN IF NOT EXISTS message_type TEXT NOT NULL DEFAULT 'text';
-		EXCEPTION WHEN duplicate_column THEN NULL;
-		END $$`,
-		`DO $$ BEGIN
-			ALTER TABLE messages ADD COLUMN IF NOT EXISTS metadata JSONB;
-		EXCEPTION WHEN duplicate_column THEN NULL;
-		END $$`,
-	}
-	for _, q := range queries {
-		if _, err := s.db.Exec(q); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (s *Store) GetOrCreateConversation(propertyID, landlordID, loanerID string) (*Conversation, error) {
 	conv := &Conversation{}
 	err := s.db.QueryRow(

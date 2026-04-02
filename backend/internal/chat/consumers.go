@@ -7,6 +7,7 @@ import (
 	"log"
 
 	kafkapkg "github.com/abdro/decentrarent/backend/internal/kafka"
+	"github.com/abdro/decentrarent/backend/internal/utils"
 )
 
 // ChatConsumers manages Kafka consumer group that posts messages into chat.
@@ -61,13 +62,8 @@ func (cc *ChatConsumers) handleOrderCreated(topic string, value []byte) error {
 		return nil
 	}
 
-	cc.service.SendSystemMessage(conv.ID,
-		"Договор был инициализирован",
-		kafkapkg.TopicOrderCreated,
-	)
-
 	cc.service.SendModalMessage(conv.ID,
-		fmt.Sprintf("Создать договор аренды? Депозит: %d, Ежемесячная оплата: %d", evt.DepositAmount, evt.RentAmount),
+		fmt.Sprintf("Order was initiated. Deposit amount: %s, Rent amount: %s", utils.RenderToken(int(evt.DepositAmount), evt.TokenMint), utils.RenderToken(int(evt.RentAmount), evt.TokenMint)),
 		ModalActionCreateAgreement,
 		evt.OrderID,
 	)
@@ -120,12 +116,12 @@ func (cc *ChatConsumers) handleOrderActivated(topic string, value []byte) error 
 	}
 
 	cc.service.SendSystemMessage(conv.ID,
-		"Договор подписан обеими сторонами",
+		"Order is signed by both sides.",
 		kafkapkg.TopicOrderActivated,
 	)
 
 	cc.service.SendModalMessage(conv.ID,
-		fmt.Sprintf("Подтвердить списание депозита %d?", evt.DepositAmount),
+		fmt.Sprintf("Waiting for deposit confirmation: %s?", utils.RenderToken(int(evt.DepositAmount), evt.TokenMint)),
 		ModalActionDepositConfirm,
 		evt.OrderID,
 	)
@@ -145,7 +141,7 @@ func (cc *ChatConsumers) handleOrderExpired(topic string, value []byte) error {
 	}
 
 	cc.service.SendSystemMessage(conv.ID,
-		"Срок подписания договора истёк. Договор отменён.",
+		"Order expired. Agreement cancelled.",
 		kafkapkg.TopicOrderExpired,
 	)
 
@@ -164,14 +160,14 @@ func (cc *ChatConsumers) handleOrderSettled(topic string, value []byte) error {
 	}
 
 	cc.service.SendSystemMessage(conv.ID,
-		"Договор завершён. Депозит возвращён.",
+		"Order settled. Deposit refunded.",
 		kafkapkg.TopicOrderSettled,
 	)
 
 	cc.service.SendDocumentMessage(conv.ID,
-		"Вам направлен договор PDF",
+		"You have received the rental agreement PDF",
 		fmt.Sprintf("/orders/%s/agreement", evt.OrderID),
-		"Договор аренды.pdf",
+		"OrderDocument.pdf",
 		evt.OrderID,
 	)
 
