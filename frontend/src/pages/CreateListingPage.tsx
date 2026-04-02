@@ -5,18 +5,11 @@ import { createProperty, getUploadUrl, registerMedia } from '../features/propert
 import { TOKEN_INFO } from '../features/properties/utils'
 
 type TokenMint = 'SOL' | 'USDC' | 'USDT'
-type PeriodType = 'hour' | 'day' | 'month'
 
 const TOKENS: { value: TokenMint; label: string; decimals: number; icon: string }[] =
   (Object.entries(TOKEN_INFO) as [TokenMint, typeof TOKEN_INFO[string]][]).map(([value, info]) => ({
     value, label: info.label, decimals: info.decimals, icon: info.icon,
   }))
-
-const PERIODS: { value: PeriodType; label: string }[] = [
-  { value: 'hour',  label: 'Per Hour' },
-  { value: 'day',   label: 'Per Day' },
-  { value: 'month', label: 'Per Month' },
-]
 
 interface ImagePreview {
   file: File
@@ -28,8 +21,8 @@ interface ListingForm {
   location: string
   description: string
   price: string
+  security_deposit: string
   token_mint: TokenMint
-  period_type: PeriodType
 }
 
 export default function CreateListingPage() {
@@ -43,7 +36,7 @@ export default function CreateListingPage() {
   const [uploadProgress, setUploadProgress] = useState('')
   const [form, setForm] = useState<ListingForm>({
     title: '', location: '', description: '',
-    price: '', token_mint: 'SOL', period_type: 'day',
+    price: '', security_deposit: '', token_mint: 'SOL',
   })
 
   const set = <K extends keyof ListingForm>(k: K, v: ListingForm[K]) =>
@@ -94,14 +87,19 @@ export default function CreateListingPage() {
       setError('You must be logged in to create a listing.')
       return
     }
-    if (!form.title || !form.location || !form.price) {
-      setError('Title, location, and price are required.')
+    if (!form.title || !form.location || !form.price || !form.security_deposit) {
+      setError('Title, location, monthly rent, and security deposit are required.')
       return
     }
 
     const priceFloat = parseFloat(form.price)
     if (isNaN(priceFloat) || priceFloat <= 0) {
-      setError('Price must be a positive number.')
+      setError('Monthly rent must be a positive number.')
+      return
+    }
+    const depositFloat = parseFloat(form.security_deposit)
+    if (isNaN(depositFloat) || depositFloat < 0) {
+      setError('Security deposit must be a positive number.')
       return
     }
     const priceSmallest = Math.round(priceFloat * Math.pow(10, selectedToken.decimals))
@@ -115,7 +113,7 @@ export default function CreateListingPage() {
         location: form.location,
         price: priceSmallest,
         token_mint: form.token_mint,
-        period_type: form.period_type,
+        period_type: 'month',
       }, token)
 
       // Upload images if any
@@ -255,10 +253,10 @@ export default function CreateListingPage() {
           </div>
         </div>
 
-        {/* Price + Period */}
+        {/* Price + Security Deposit */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <label style={labelStyle}>Price ({form.token_mint})</label>
+            <label style={labelStyle}>Monthly rent ({form.token_mint})</label>
             <input
               type="number" step="any" min="0"
               placeholder={form.token_mint === 'SOL' ? '0.5' : '50.00'}
@@ -268,17 +266,14 @@ export default function CreateListingPage() {
             />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <label style={labelStyle}>Rental period</label>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {PERIODS.map(p => (
-                <button key={p.value} onClick={() => set('period_type', p.value)} style={{
-                  ...pillStyle(form.period_type === p.value),
-                  padding: '10px 14px', textAlign: 'left',
-                }}>
-                  {p.label}
-                </button>
-              ))}
-            </div>
+            <label style={labelStyle}>Security deposit ({form.token_mint})</label>
+            <input
+              type="number" step="any" min="0"
+              placeholder={form.token_mint === 'SOL' ? '1.0' : '100.00'}
+              value={form.security_deposit}
+              onChange={e => set('security_deposit', e.target.value)}
+              style={inputStyle}
+            />
           </div>
         </div>
 
@@ -298,11 +293,19 @@ export default function CreateListingPage() {
         {form.price && (
           <div style={{ background: '#1C1C20', borderRadius: 12, padding: '12px 16px', border: '1px solid rgba(255,255,255,0.07)' }}>
             <p style={{ fontSize: 12, color: '#6A6A7A', marginBottom: 4 }}>Listing preview</p>
-            <p style={{ fontSize: 16, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <img src={TOKEN_INFO[form.token_mint]?.icon} alt="" style={{ width: 20, height: 20, borderRadius: '50%' }} />
-              {parseFloat(form.price) || 0} {form.token_mint}
-              <span style={{ color: '#6A6A7A', fontWeight: 400, fontSize: 13 }}>/ {form.period_type}</span>
-            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <p style={{ fontSize: 16, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <img src={TOKEN_INFO[form.token_mint]?.icon} alt="" style={{ width: 20, height: 20, borderRadius: '50%' }} />
+                {parseFloat(form.price) || 0} {form.token_mint}
+                <span style={{ color: '#6A6A7A', fontWeight: 400, fontSize: 13 }}>/ month</span>
+              </p>
+              {form.security_deposit && (
+                <p style={{ fontSize: 14, color: '#8A8A9A', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/></svg>
+                  Security deposit: {parseFloat(form.security_deposit) || 0} {form.token_mint}
+                </p>
+              )}
+            </div>
           </div>
         )}
 

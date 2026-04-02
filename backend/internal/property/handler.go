@@ -124,7 +124,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 
 	// Default to listed for public queries
 	if filter.Status == "" && filter.Owner == "" {
-		filter.Status = "listed"
+		filter.Status = "available"
 	}
 
 	props, err := h.store.List(filter)
@@ -240,8 +240,8 @@ func (h *Handler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Status != "listed" && req.Status != "unlisted" {
-		http.Error(w, `{"error":"status must be 'listed' or 'unlisted'"}`, http.StatusBadRequest)
+	if req.Status != "available" && req.Status != "archive" {
+		http.Error(w, `{"error":"status must be 'available' or 'unlisted'"}`, http.StatusBadRequest)
 		return
 	}
 

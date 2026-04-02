@@ -54,7 +54,7 @@ func (s *Store) Create(ownerWallet string, req *CreatePropertyRequest, verificat
 		Price:              req.Price,
 		TokenMint:          req.TokenMint,
 		PeriodType:         req.PeriodType,
-		Status:             "listed",
+		Status:             "available",
 		VerificationStatus: verificationStatus,
 		CreatedAt:          time.Now(),
 		UpdatedAt:          time.Now(),

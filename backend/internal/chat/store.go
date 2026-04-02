@@ -3,6 +3,7 @@ package chat
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -115,6 +116,21 @@ func (s *Store) ListConversations(userID string) ([]Conversation, error) {
 		convs = append(convs, c)
 	}
 	return convs, nil
+}
+
+func (s *Store) DeleteConversation(conversationID, userID string) error {
+	result, err := s.db.Exec(
+		`DELETE FROM conversations WHERE id = $1 AND (landlord_id = $2 OR loaner_id = $2)`,
+		conversationID, userID,
+	)
+	if err != nil {
+		return err
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return fmt.Errorf("conversation not found or not authorized")
+	}
+	return nil
 }
 
 // SaveMessage saves a regular text message.
