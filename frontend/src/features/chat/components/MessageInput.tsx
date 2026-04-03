@@ -17,7 +17,7 @@ export function MessageInput({ onSend, disabled }: MessageInputProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex gap-2 p-3 border-t border-gray-800">
+    <form onSubmit={handleSubmit} className="flex gap-2 p-3 border-t border-gray-800 w-full min-w-0">
       <input
         type="text"
         value={text}

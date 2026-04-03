@@ -27,3 +27,7 @@ export function listOrdersByConversation(conversationId: string, token: string):
 export function getOrder(orderId: string, token: string): Promise<Order> {
   return apiFetch<Order>(`/orders/${orderId}`, {}, token);
 }
+
+export function listOrdersByProperty(propertyId: string, token: string): Promise<Order[]> {
+  return apiFetch<Order[]>(`/orders?property_id=${encodeURIComponent(propertyId)}`, {}, token);
+}

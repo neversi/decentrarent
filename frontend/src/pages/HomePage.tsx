@@ -2,21 +2,45 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../features/auth/store'
 import { listProperties } from '../features/properties/api'
-import { formatPrice, TOKEN_INFO } from '../features/properties/utils'
+import { apiFetch } from '../lib/api'
 import type { Property } from '../features/properties/types'
+import type { Conversation } from '../features/chat/types'
 
-const STATUS_STYLE: Record<string, { bg: string; color: string; label: string }> = {
-  listed:   { bg: 'rgba(61,214,140,0.12)',  color: '#3DD68C', label: 'Occupied' },
-  unlisted: { bg: 'rgba(255,77,106,0.12)',  color: '#FF4D6A', label: 'Vacant'   },
-  rented:   { bg: 'rgba(224,120,64,0.12)', color: '#E07840', label: 'Leased'   },
+interface Order {
+  id: string
+  conversation_id: string
+  property_id: string
+  escrow_status: string
+  rent_amount: number
+  deposit_amount: number
+  token_mint: string
+  rent_start_date: string
+  rent_end_date: string
+  created_at: string
+  property?: Property
 }
 
-const FALLBACK_STYLE = { bg: 'rgba(255,255,255,0.06)', color: '#7A7A8A', label: 'Unknown' }
+// Escrow status colors - iOS 16 liquid glass
+const ESCROW_STATUS_COLORS: Record<string, { rentColor: string; depositColor: string; bg: string; border: string; label: string }> = {
+  new: { rentColor: '#8A8A9A', depositColor: '#8A8A9A', bg: 'rgba(138,138,154,0.08)', border: 'rgba(138,138,154,0.2)', label: 'New' },
+  awaiting_deposit: { rentColor: '#8A8A9A', depositColor: '#8A8A9A', bg: 'rgba(138,138,154,0.08)', border: 'rgba(138,138,154,0.2)', label: 'Awaiting Deposit' },
+  awaiting_signatures: { rentColor: '#FF9500', depositColor: '#FF9500', bg: 'rgba(255,149,0,0.08)', border: 'rgba(255,149,0,0.2)', label: 'Awaiting Signatures' },
+  active: { rentColor: '#34C759', depositColor: '#E07840', bg: 'rgba(52,199,89,0.08)', border: 'rgba(52,199,89,0.2)', label: 'Active' },
+  settled: { rentColor: '#34C759', depositColor: '#34C759', bg: 'rgba(52,199,89,0.08)', border: 'rgba(52,199,89,0.2)', label: 'Settled' },
+  expired: { rentColor: '#FF4D6A', depositColor: '#FF4D6A', bg: 'rgba(255,77,106,0.08)', border: 'rgba(255,77,106,0.2)', label: 'Expired' },
+  rejected: { rentColor: '#FF4D6A', depositColor: '#FF4D6A', bg: 'rgba(255,77,106,0.08)', border: 'rgba(255,77,106,0.2)', label: 'Rejected' },
+  disputed: { rentColor: '#FF9500', depositColor: '#FF9500', bg: 'rgba(255,149,0,0.08)', border: 'rgba(255,149,0,0.2)', label: 'Disputed' },
+  dispute_resolved_tenant: { rentColor: '#34C759', depositColor: '#34C759', bg: 'rgba(52,199,89,0.08)', border: 'rgba(52,199,89,0.2)', label: 'Resolved (Tenant)' },
+  dispute_resolved_landlord: { rentColor: '#34C759', depositColor: '#34C759', bg: 'rgba(52,199,89,0.08)', border: 'rgba(52,199,89,0.2)', label: 'Resolved (Landlord)' },
+}
+
+const DEFAULT_ESCROW_COLORS = { rentColor: '#8A8A9A', depositColor: '#8A8A9A', bg: 'rgba(138,138,154,0.08)', border: 'rgba(138,138,154,0.2)', label: 'Pending' }
 
 export default function HomePage() {
   const { user, token, isAuthenticated } = useAuthStore()
   const navigate = useNavigate()
   const [listings, setListings] = useState<Property[]>([])
+  const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -24,124 +48,265 @@ export default function HomePage() {
       navigate('/auth')
       return
     }
-    if (!user) return
+    if (!user || !token) return
 
     setLoading(true)
-    listProperties({ owner: user.id }, token)
-      .then(setListings)
-      .catch(() => setListings([]))
+    Promise.all([
+      listProperties({ owner: user.id }, token).catch(() => []),
+      fetch('/api/orders', { headers: { 'Authorization': `Bearer ${token}` } })
+        .then(r => r.json())
+        .catch(() => []),
+    ])
+      .then(([props, ordersData]) => {
+        setListings(props)
+        setOrders(Array.isArray(ordersData) ? ordersData : [])
+      })
       .finally(() => setLoading(false))
   }, [isAuthenticated, navigate, user, token])
+
+  const handleTransactionClick = async (order: Order) => {
+    try {
+      // Fetch the conversation details
+      const conversation = await apiFetch<Conversation>(`/conversations/${order.conversation_id}`, {}, token)
+      // Navigate to chat with conversation data
+      navigate('/chat', { state: { conversation } })
+    } catch (err) {
+      console.error('Failed to load conversation:', err)
+      // Fallback: just navigate to chat, it will load the conversation
+      navigate('/chat')
+    }
+  }
 
   if (!user) return <div style={{ padding: '20px', color: '#ddd' }}>Loading your dashboard...</div>
 
   const firstName = user.display_name ?? user.wallet_address.slice(0, 8)
-  const userBalance = typeof user.balance === 'number' ? user.balance : 0
-  const totalIncome = listings
-    .filter(l => l.status !== 'unlisted')
-    .reduce((s, l) => s + l.price, 0)
+  const totalListings = listings.length
+  const assetsRented = listings.filter(l => l.status === 'rented').length
+  const totalMonthlyIncome = orders
+    .filter(o => o.escrow_status === 'active')
+    .reduce((sum, o) => sum + o.rent_amount, 0)
+  const totalEscrow = orders
+    .filter(o => ['active', 'settled', 'awaiting_deposit', 'awaiting_signatures'].includes(o.escrow_status))
+    .reduce((sum, o) => sum + (o.deposit_amount + o.rent_amount), 0)
 
   return (
-    <div style={{ padding: '0 20px 100px' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '56px 0 28px' }}>
+    <div style={{ padding: '0 20px 100px', background: 'transparent' }}>
+      {/* Header with greeting */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '56px 0 32px' }}>
         <div>
-          <p style={{ color: '#6A6A7A', fontSize: 13, marginBottom: 3 }}>Good morning</p>
-          <h1 style={{ fontFamily: "'Syne', sans-serif", fontSize: 24, fontWeight: 800, letterSpacing: '-0.02em' }}>
+          <p style={{ color: '#8A8A9A', fontSize: 13, marginBottom: 3, fontWeight: 500 }}>Good morning</p>
+          <h1 style={{ fontFamily: "'Syne', sans-serif", fontSize: 32, fontWeight: 800, letterSpacing: '-0.02em', background: 'linear-gradient(135deg, #F0F0F5, #B0B0BA)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
             {firstName}
           </h1>
         </div>
         <div style={{
-          width: 42, height: 42, borderRadius: '50%',
-          background: 'linear-gradient(135deg, #E07840, #7A3020)',
+          width: 48, height: 48, borderRadius: '50%',
+          background: 'linear-gradient(135deg, rgba(52,199,89,0.2), rgba(52,199,89,0.1))',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 14, color: 'white',
-          border: '2px solid rgba(224,120,64,0.3)',
+          fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 16, color: '#34C759',
+          border: '1.5px solid rgba(52,199,89,0.3)',
+          boxShadow: '0 8px 32px rgba(52,199,89,0.15), inset 0 1px 1px rgba(255,255,255,0.2)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
         }}>
           {firstName.slice(0, 2).toUpperCase()}
         </div>
       </div>
 
-      {/* Balance Card */}
+      {/* Primary Balance Card - iOS 16 Liquid Glass */}
       <div style={{
-        background: 'linear-gradient(135deg, #1A1208, #1C1410, #141416)',
-        borderRadius: 20, padding: 24, marginBottom: 20,
-        border: '1px solid rgba(224,120,64,0.2)', position: 'relative', overflow: 'hidden',
+        position: 'relative',
+        marginBottom: 24,
+        borderRadius: 24,
+        overflow: 'hidden',
+        background: 'linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02))',
+        border: '1px solid rgba(255,255,255,0.15)',
+        backdropFilter: 'blur(30px)',
+        WebkitBackdropFilter: 'blur(30px)',
+        padding: 32,
+        boxShadow: '0 8px 32px rgba(0,0,0,0.3), inset 0 1px 1px rgba(255,255,255,0.2)',
       }}>
-        <div style={{ position: 'absolute', top: -40, right: -40, width: 120, height: 120, borderRadius: '50%', background: 'rgba(224,120,64,0.15)', filter: 'blur(40px)' }}/>
-        <p style={{ color: '#7A6A5A', fontSize: 12, fontWeight: 500, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Wallet Balance</p>
-        <h2 style={{ fontFamily: "'Syne', sans-serif", fontSize: 36, fontWeight: 800, letterSpacing: '-0.02em', marginBottom: 6 }}>
-          ${userBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-        </h2>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3DD68C" strokeWidth="2.5"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
-          <span style={{ color: '#3DD68C', fontSize: 13, fontWeight: 500 }}>+4.2% this month</span>
-        </div>
-        <div style={{ height: 1, background: 'rgba(255,255,255,0.06)', margin: '18px 0' }}/>
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <div>
-            <p style={{ color: '#6A6A5A', fontSize: 11, marginBottom: 4 }}>Monthly Income</p>
-            <p style={{ fontWeight: 700, fontSize: 16 }}>${totalIncome.toLocaleString()}</p>
+        {/* Background gradient orbs */}
+        <div style={{
+          position: 'absolute', top: -80, right: -80, width: 240, height: 240,
+          borderRadius: '50%', background: 'radial-gradient(circle, rgba(52,199,89,0.15), transparent)',
+          filter: 'blur(80px)',
+        }} />
+        <div style={{
+          position: 'absolute', bottom: -60, left: -60, width: 200, height: 200,
+          borderRadius: '50%', background: 'radial-gradient(circle, rgba(52,199,89,0.1), transparent)',
+          filter: 'blur(80px)',
+        }} />
+
+        <div style={{ position: 'relative', zIndex: 1 }}>
+          <p style={{ color: '#8A8A9A', fontSize: 12, fontWeight: 600, marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.7px' }}>Total Value Locked</p>
+          
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 24 }}>
+            <h2 style={{ fontFamily: "'Syne',sans-serif", fontSize: 42, fontWeight: 800, letterSpacing: '-0.02em', color: '#F0F0F5' }}>
+              {(totalEscrow / 1000000).toFixed(2)}
+            </h2>
+            <span style={{ fontSize: 18, color: '#8A8A9A', fontWeight: 600 }}>SOL</span>
           </div>
-          <div style={{ textAlign: 'right' }}>
-            <p style={{ color: '#6A6A5A', fontSize: 11, marginBottom: 4 }}>Active Listings</p>
-            <p style={{ fontWeight: 700, fontSize: 16 }}>{listings.filter(l => l.status !== 'unlisted').length}/{listings.length}</p>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
+            {/* Monthly Income */}
+            <div style={{
+              background: 'rgba(52,199,89,0.1)',
+              borderRadius: 14,
+              padding: 16,
+              border: '1px solid rgba(52,199,89,0.2)',
+              backdropFilter: 'blur(10px)',
+              WebkitBackdropFilter: 'blur(10px)',
+            }}>
+              <p style={{ color: '#8A8A9A', fontSize: 11, marginBottom: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.3px' }}>Monthly Income</p>
+              <p style={{ fontFamily: "'Syne',sans-serif", fontSize: 22, fontWeight: 700, color: '#34C759' }}>
+                {(totalMonthlyIncome / 1000000).toFixed(3)} <span style={{ fontSize: 12, fontWeight: 500 }}>SOL</span>
+              </p>
+            </div>
+
+            {/* Assets Status */}
+            <div style={{
+              background: 'rgba(255,149,0,0.1)',
+              borderRadius: 14,
+              padding: 16,
+              border: '1px solid rgba(255,149,0,0.2)',
+              backdropFilter: 'blur(10px)',
+              WebkitBackdropFilter: 'blur(10px)',
+            }}>
+              <p style={{ color: '#8A8A9A', fontSize: 11, marginBottom: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.3px' }}>Assets Rented</p>
+              <p style={{ fontFamily: "'Syne',sans-serif", fontSize: 22, fontWeight: 700, color: '#FF9500' }}>
+                {assetsRented}/{totalListings}
+              </p>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 12 }}>
+            <Link to="/listings/create" style={{ flex: 1, textDecoration: 'none' }}>
+              <button style={{
+                width: '100%', background: 'linear-gradient(135deg, #34C759, #30B050)',
+                border: '1px solid rgba(52,199,89,0.4)',
+                borderRadius: 12, padding: 12, color: 'white', fontWeight: 600, fontSize: 14,
+                cursor: 'pointer', fontFamily: "'DM Sans',sans-serif",
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                transition: 'all 0.3s ease',
+                boxShadow: '0 4px 12px rgba(52,199,89,0.25)',
+              }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                Add Asset
+              </button>
+            </Link>
+            <Link to="/listings" style={{ flex: 1, textDecoration: 'none' }}>
+              <button style={{
+                width: '100%', background: 'rgba(255,255,255,0.08)',
+                border: '1px solid rgba(255,255,255,0.15)',
+                borderRadius: 12, padding: 12, color: '#F0F0F5', fontWeight: 600, fontSize: 14,
+                cursor: 'pointer', fontFamily: "'DM Sans',sans-serif",
+                transition: 'all 0.3s ease',
+                backdropFilter: 'blur(10px)',
+                WebkitBackdropFilter: 'blur(10px)',
+              }}>
+                Manage Assets
+              </button>
+            </Link>
           </div>
         </div>
       </div>
 
-      {/* Quick actions */}
-      <Link to="/chat" style={{ textDecoration: 'none', display: 'block', marginBottom: 28 }}>
-        <div style={{ background: '#1C1C20', borderRadius: 14, padding: 14, border: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#9A9AAA" strokeWidth="1.8"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2v10z"/></svg>
-          <span style={{ color: '#9A9AAA', fontWeight: 600, fontSize: 14 }}>Messages</span>
-        </div>
-      </Link>
-
-      {/* My Listings */}
+      {/* Recent Transactions Section */}
       <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-          <p style={{ fontFamily: "'Syne',sans-serif", fontWeight: 700, fontSize: 13, color: '#4A4A5A', textTransform: 'uppercase', letterSpacing: '0.06em' }}>My Listings</p>
-          <Link to="/listings/create" style={{ textDecoration: 'none' }}>
-            <div style={{ background: '#E07840', borderRadius: 10, padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 5 }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              <span style={{ color: 'white', fontWeight: 600, fontSize: 13 }}>Add</span>
-            </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <p style={{ fontFamily: "'Syne',sans-serif", fontWeight: 700, fontSize: 15, color: '#F0F0F5', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Recent Transactions</p>
+          <Link to="/listings" style={{ textDecoration: 'none' }}>
+            <span style={{ color: '#34C759', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>View All</span>
           </Link>
         </div>
 
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '40px 0', color: '#6A6A7A', fontSize: 14 }}>Loading listings...</div>
-        ) : listings.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '40px 0', color: '#6A6A7A', fontSize: 14 }}>No listings yet. Create your first one!</div>
+          <div style={{ textAlign: 'center', padding: '40px 0', color: '#6A6A7A', fontSize: 14 }}>Loading transactions...</div>
+        ) : orders.length === 0 ? (
+          <div style={{
+            textAlign: 'center', padding: '60px 20px',
+            background: 'rgba(255,255,255,0.03)',
+            borderRadius: 16, border: '1px solid rgba(255,255,255,0.08)',
+            backdropFilter: 'blur(10px)',
+            WebkitBackdropFilter: 'blur(10px)',
+          }}>
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#3A3A4A" strokeWidth="1.5" style={{ marginBottom: 12, margin: '0 auto 12px' }}>
+              <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0110 0v4" />
+            </svg>
+            <p style={{ color: '#8A8A9A', fontSize: 14, marginBottom: 4 }}>No active transactions</p>
+            <p style={{ color: '#6A6A7A', fontSize: 13 }}>Start renting to see transactions here</p>
+          </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {listings.map((l) => {
-              const s = STATUS_STYLE[l.status] ?? FALLBACK_STYLE
-              const img = l.media?.[0]?.url
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {orders.slice(0, 5).map((order) => {
+              const colors = ESCROW_STATUS_COLORS[order.escrow_status] || DEFAULT_ESCROW_COLORS
+              
               return (
-                <Link key={l.id} to={`/listings/${l.id}`} style={{ textDecoration: 'none' }}>
-                  <div style={{ background: '#141416', borderRadius: 16, border: '1px solid rgba(255,255,255,0.07)', padding: '16px 18px', display: 'flex', alignItems: 'center', gap: 14 }}>
-                    <div style={{ width: 46, height: 46, borderRadius: 12, background: '#1C1C20', border: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0, overflow: 'hidden' }}>
-                      {img
-                        ? <img src={img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                        : <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6A6A7A" strokeWidth="1.5"><path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z"/><path d="M9 21V12h6v9"/></svg>}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontWeight: 600, fontSize: 14, marginBottom: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#F0F0F5' }}>{l.title}</p>
-                      <p style={{ color: '#6A6A7A', fontSize: 12 }}>{l.location}</p>
-                    </div>
-                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                      <p style={{ fontWeight: 700, fontSize: 14, marginBottom: 5, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4, color: '#F0F0F5' }}>
-                      {l.status === 'unlisted' ? '—' : <>
-                        <img src={TOKEN_INFO[l.token_mint]?.icon || TOKEN_INFO['SOL'].icon} alt="" style={{ width: 14, height: 14, borderRadius: '50%' }} />
-                        {formatPrice(l.price, l.token_mint)}
-                      </>}
+                <div
+                  key={order.id}
+                  onClick={() => handleTransactionClick(order)}
+                  style={{
+                    background: colors.bg,
+                    borderRadius: 14,
+                    border: `1px solid ${colors.border}`,
+                    padding: '14px 16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    backdropFilter: 'blur(20px)',
+                    WebkitBackdropFilter: 'blur(20px)',
+                    transition: 'all 0.3s ease',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.1), inset 0 1px 1px rgba(255,255,255,0.1)',
+                  }}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLDivElement).style.background = colors.bg.replace('0.08)', '0.12)')
+                    ;(e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)'
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLDivElement).style.background = colors.bg
+                    ;(e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'
+                  }}
+                >
+                  {/* Status indicator */}
+                  <div style={{
+                    width: 8, height: 8, borderRadius: '50%',
+                    background: colors.rentColor,
+                    boxShadow: `0 0 12px ${colors.rentColor}`,
+                    flexShrink: 0,
+                  }} />
+
+                  {/* Transaction info */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontWeight: 600, fontSize: 14, marginBottom: 4, color: '#F0F0F5' }}>
+                      {order.property?.title || 'Transaction'}
                     </p>
-                      <span style={{ background: s.bg, color: s.color, padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600 }}>{s.label}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <span style={{ color: '#8A8A9A', fontSize: 12 }}>{colors.label}</span>
+                      <span style={{ fontSize: 10, color: '#6A6A7A' }}>•</span>
+                      <span style={{ color: '#8A8A9A', fontSize: 12 }}>
+                        {new Date(order.created_at).toLocaleDateString()}
+                      </span>
                     </div>
                   </div>
-                </Link>
+
+                  {/* Amounts */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, textAlign: 'right', flexShrink: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
+                      <span style={{ color: '#8A8A9A', fontSize: 11, fontWeight: 500 }}>Rent:</span>
+                      <span style={{ color: colors.rentColor, fontWeight: 700, fontSize: 13 }}>
+                        {(order.rent_amount / 1000000).toFixed(3)} SOL
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
+                      <span style={{ color: '#8A8A9A', fontSize: 11, fontWeight: 500 }}>Deposit:</span>
+                      <span style={{ color: colors.depositColor, fontWeight: 700, fontSize: 13 }}>
+                        {(order.deposit_amount / 1000000).toFixed(3)} SOL
+                      </span>
+                    </div>
+                  </div>
+                </div>
               )
             })}
           </div>

@@ -1,4 +1,5 @@
 import { NavLink, useLocation } from 'react-router-dom'
+import { useChatStore } from '../../features/chat/store'
 
 const tabs = [
   {
@@ -43,6 +44,9 @@ const tabs = [
 
 export default function BottomNav() {
   const { pathname } = useLocation()
+  const isWideScreen = typeof window !== 'undefined' && window.innerWidth > 768
+  const unreadCounts = useChatStore((s) => s.unreadCounts)
+  const totalUnread = Object.values(unreadCounts).reduce((sum, n) => sum + n, 0)
 
   return (
     <nav
@@ -52,38 +56,56 @@ export default function BottomNav() {
         left: '50%',
         transform: 'translateX(-50%)',
         width: '100%',
-        maxWidth: 430,
+        maxWidth: isWideScreen ? 'none' : 430,
         background: 'rgba(12,12,14,0.94)',
         backdropFilter: 'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',
         borderTop: '1px solid rgba(255,255,255,0.06)',
         display: 'flex',
-        justifyContent: 'space-around',
+        justifyContent: isWideScreen ? 'center' : 'space-around',
         alignItems: 'center',
-        padding: '10px 0 24px',
+        padding: isWideScreen ? '14px 0' : '10px 0 24px',
         zIndex: 100,
       }}
     >
       {tabs.map((t) => {
         const active = pathname.startsWith(t.to)
+        const isWideScreen = typeof window !== 'undefined' && window.innerWidth > 768
         return (
           <NavLink key={t.to} to={t.to} style={{ textDecoration: 'none' }}>
             <div
               style={{
                 display: 'flex',
-                flexDirection: 'column',
+                flexDirection: isWideScreen ? 'row' : 'column',
                 alignItems: 'center',
-                gap: 4,
-                padding: '4px 14px',
+                gap: isWideScreen ? 8 : 4,
+                padding: isWideScreen ? '8px 20px' : '4px 14px',
+                transition: 'all 0.2s ease',
               }}
             >
-              {t.icon(active)}
+              <div style={{ position: 'relative' }}>
+                {t.icon(active)}
+                {t.to === '/chat' && totalUnread > 0 && (
+                  <div style={{
+                    position: 'absolute', top: -4, right: -8,
+                    minWidth: 16, height: 16, borderRadius: 8,
+                    background: '#FF4D6A', color: '#fff',
+                    fontSize: 9, fontWeight: 700,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    padding: '0 4px', border: '2px solid rgba(12,12,14,0.94)',
+                    boxShadow: '0 2px 6px rgba(255,77,106,0.4)',
+                  }}>
+                    {totalUnread > 99 ? '99+' : totalUnread}
+                  </div>
+                )}
+              </div>
               <span
                 style={{
-                  fontSize: 10,
+                  fontSize: isWideScreen ? 13 : 10,
                   fontWeight: active ? 600 : 400,
                   color: active ? '#fff' : '#3A3A4A',
                   fontFamily: "'DM Sans', sans-serif",
+                  display: isWideScreen ? 'block' : 'block',
                 }}
               >
                 {t.label}

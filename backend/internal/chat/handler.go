@@ -49,6 +49,28 @@ func (h *Handler) ListConversations(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(convs)
 }
 
+// DeleteConversation godoc
+// @Summary Delete a conversation
+// @Description Deletes a conversation if the user is a participant
+// @Tags chat
+// @Security BearerAuth
+// @Param id path string true "Conversation ID"
+// @Success 204 "No Content"
+// @Router /conversations/{id} [delete]
+func (h *Handler) DeleteConversation(w http.ResponseWriter, r *http.Request) {
+	userID := mw.GetUserID(r.Context())
+	if userID == "" {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+	convID := chi.URLParam(r, "id")
+	if err := h.store.DeleteConversation(convID, userID); err != nil {
+		http.Error(w, `{"error":"failed to delete conversation"}`, http.StatusBadRequest)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // GetMessages godoc
 // @Summary Get messages
 // @Description Returns messages for a conversation with pagination. Supports all message types: text, system, document, modal.

@@ -174,10 +174,12 @@ func main() {
 		r.Use(authService.AuthMiddleware)
 		r.Post("/auth/refresh", authHandler.Refresh)
 		r.Get("/user/me", userHandler.GetMe)
+		r.Get("/users/{id}", userHandler.GetPublicProfile)
 
 		// Chat
 		r.Get("/conversations", chatHandler.ListConversations)
 		r.Post("/conversations", chatHandler.CreateConversation)
+		r.Delete("/conversations/{id}", chatHandler.DeleteConversation)
 		r.Get("/conversations/{id}/messages", chatHandler.GetMessages)
 		r.Post("/conversations/documents", chatHandler.SendDocument)
 

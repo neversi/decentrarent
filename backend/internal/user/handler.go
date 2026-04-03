@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
 	mw "github.com/abdro/decentrarent/backend/internal/middleware"
 )
 
@@ -38,4 +39,38 @@ func (h *Handler) GetMe(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(u)
+}
+
+// GetPublicProfile godoc
+// @Summary Get user public profile
+// @Description Returns a user's public profile by ID (display_name only)
+// @Tags user
+// @Produce json
+// @Param id path string true "User ID"
+// @Success 200 {object} map[string]string
+// @Router /users/{id} [get]
+func (h *Handler) GetPublicProfile(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		http.Error(w, `{"error":"missing id"}`, http.StatusBadRequest)
+		return
+	}
+
+	u, err := h.store.GetByID(id)
+	if err != nil {
+		http.Error(w, `{"error":"user not found"}`, http.StatusNotFound)
+		return
+	}
+
+	name := u.DisplayName
+	if name == "" {
+		name = u.WalletAddress
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"id":             u.ID,
+		"display_name":   name,
+		"wallet_address": u.WalletAddress,
+	})
 }
