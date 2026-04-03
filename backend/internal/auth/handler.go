@@ -26,13 +26,14 @@ type nonceResponse struct {
 }
 
 type signupRequest struct {
-	Username      string `json:"username"`
-	FirstName     string `json:"first_name"`
-	LastName      string `json:"last_name"`
-	Email         string `json:"email"`
-	Phone         string `json:"phone"`
-	Password      string `json:"password"`
-	WalletAddress string `json:"wallet_address"`
+	Username      string        `json:"username"`
+	FirstName     string        `json:"first_name"`
+	LastName      string        `json:"last_name"`
+	Email         string        `json:"email"`
+	Phone         string        `json:"phone"`
+	Password      string        `json:"password"`
+	WalletAddress string        `json:"wallet_address"`
+	UserType      user.UserType `json:"user_type"`
 }
 
 type loginRequest struct {
@@ -62,6 +63,11 @@ func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !req.UserType.IsValid() {
+		http.Error(w, `{"error":"user_type must be 'tenant' or 'landlord'"}`, http.StatusBadRequest)
+		return
+	}
+
 	passwordHash, err := h.authService.HashPassword(req.Password)
 	if err != nil {
 		http.Error(w, `{"error":"failed to process password"}`, http.StatusInternalServerError)
@@ -76,6 +82,7 @@ func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
 		Phone:         req.Phone,
 		PasswordHash:  passwordHash,
 		WalletAddress: req.WalletAddress,
+		UserType:      req.UserType,
 	})
 	if err != nil {
 		// Проверяем конфликт уникальности (username или email уже заняты)

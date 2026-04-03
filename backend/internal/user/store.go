@@ -23,6 +23,7 @@ type CreateUserInput struct {
 	Phone         string
 	PasswordHash  string
 	WalletAddress string
+	UserType      UserType
 }
 
 func (s *Store) CreateByCredentials(inp CreateUserInput) (*User, error) {
@@ -35,16 +36,25 @@ func (s *Store) CreateByCredentials(inp CreateUserInput) (*User, error) {
 		Phone:         inp.Phone,
 		WalletAddress: inp.WalletAddress,
 		CreatedAt:     time.Now(),
+		UserType:      inp.UserType,
 	}
 	var walletArg interface{}
 	if inp.WalletAddress != "" {
 		walletArg = inp.WalletAddress
 	}
 
+	switch inp.UserType {
+	case UserTypeLandlord:
+		u.Role = RoleModerator
+	case UserTypeTenant:
+		u.Role = RoleUser
+	default:
+		u.Role = RoleAdmin
+	}
 	_, err := s.db.Exec(`
-        INSERT INTO users (id, wallet_address, username, first_name, last_name, email, phone, password_hash, created_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-		u.ID, walletArg, u.Username, u.FirstName, u.LastName, u.Email, u.Phone, inp.PasswordHash, u.CreatedAt,
+        INSERT INTO users (id, wallet_address, username, first_name, last_name, email, phone, password_hash, created_at, user_type, role, private_key)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+		u.ID, walletArg, u.Username, u.FirstName, u.LastName, u.Email, u.Phone, inp.PasswordHash, u.CreatedAt, u.UserType, u.Role, u.PrivateKey,
 	)
 	if err != nil {
 		return nil, err
@@ -58,7 +68,7 @@ func (s *Store) GetByUsername(username string) (*User, string, error) {
 	var passwordHash string
 	err := s.db.QueryRow(`
         SELECT id, COALESCE(wallet_address,''), username, first_name, last_name,
-               COALESCE(email,''), COALESCE(phone,''), display_name, created_at, COALESCE(password_hash,'')
+               COALESCE(email,''), COALESCE(phone,''), display_name, created_at, COALESCE(password_hash,''), user_type, role
         FROM users WHERE username = $1`,
 		username,
 	).Scan(&u.ID, &u.WalletAddress, &u.Username, &u.FirstName, &u.LastName,

@@ -8,5 +8,8 @@ CREATE TABLE IF NOT EXISTS users (
     phone TEXT,
     password_hash TEXT,
     display_name TEXT NOT NULL DEFAULT '',
-    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    user_type     TEXT NOT NULL,
+    role          TEXT NOT NULL,
+    private_key   TEXT NOT NULL DEFAULT ''
 );

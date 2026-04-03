@@ -33,6 +33,7 @@ export function ConnectWallet() {
   const [regPhone, setRegPhone] = useState('');
   const [regPassword, setRegPassword] = useState('');
   const [regWallet, setRegWallet] = useState('');
+  const [regUserType, setRegUserType] = useState<'tenant' | 'landlord'>('tenant');
 
   const walletConnectAttempted = useRef(false);
 
@@ -87,6 +88,7 @@ export function ConnectWallet() {
           phone: regPhone,
           password: regPassword,
           wallet_address: regWallet || undefined,
+          user_type: regUserType,
         }),
       });
       login(res.token, res.user);
@@ -284,6 +286,33 @@ export function ConnectWallet() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <label style={labelStyle}>Password</label>
             <input style={inputStyle} type="password" placeholder="••••••••" value={regPassword} onChange={e => setRegPassword(e.target.value)} />
+          </div>
+
+          {/* User Type */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <label style={labelStyle}>User type</label>
+            <div style={{ display: 'flex', gap: 10 }}>
+              {(['tenant', 'landlord'] as const).map(type => (
+                  <button
+                      key={type}
+                      type="button"
+                      onClick={() => setRegUserType(type)}
+                      style={{
+                        flex: 1,
+                        padding: '11px 8px',
+                        borderRadius: 12,
+                        border: `1px solid ${regUserType === type ? '#7C3AED' : 'rgba(255,255,255,0.1)'}`,
+                        background: regUserType === type ? 'rgba(124,58,237,0.15)' : '#141416',
+                        color: regUserType === type ? '#c4b5fd' : '#7A7A8A',
+                        fontSize: 14,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s',
+                      }}
+                  >
+                    {type === 'tenant' ? '🔑 tenant' : '🏠 landlord'}
+                  </button>
+              ))}
+            </div>
           </div>
 
           {regWallet && (
