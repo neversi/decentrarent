@@ -164,8 +164,10 @@ func (s *Service) ExpireEscrow(ctx context.Context, landlord, tenant solana.Publ
 	return s.sendAndConfirm(ctx, ix)
 }
 
-// sendAndConfirm отправляет транзакцию и ждёт подтверждения через polling
-func (s *Service) sendAndConfirm(ctx context.Context, ix solana.Instruction) (string, error) {
+func (s *Service) sendAndConfirm(
+	ctx context.Context,
+	ix solana.Instruction,
+) (string, error) {
 	recent, err := s.rpc.GetLatestBlockhash(ctx, rpc.CommitmentConfirmed)
 	if err != nil {
 		return "", fmt.Errorf("get blockhash: %w", err)
@@ -190,43 +192,20 @@ func (s *Service) sendAndConfirm(ctx context.Context, ix solana.Instruction) (st
 		return "", fmt.Errorf("sign tx: %w", err)
 	}
 
-	sig, err := s.rpc.SendTransaction(ctx, tx)
-	if err != nil {
-		return "", fmt.Errorf("send tx: %w", err)
-	}
+	sig, err := s.rpc.SendTransactionWithOpts(
+		ctx,
+		tx,
+		rpc.TransactionOpts{
+			PreflightCommitment: rpc.CommitmentConfirmed,
+			SkipPreflight:       false,
+		},
+	)
 
-	// Polling подтверждения
-	//if err := s.pollConfirmation(ctx, sig); err != nil {
-	//	return sig.String(), fmt.Errorf("confirm tx: %w", err)
-	//}
+	if err != nil {
+		return "", fmt.Errorf("send and confirm tx: %w", err)
+	}
 
 	return sig.String(), nil
-}
-
-func (s *Service) pollConfirmation(ctx context.Context, sig solana.Signature) error {
-	for i := 0; i < 30; i++ {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-
-		resp, err := s.rpc.GetSignatureStatuses(ctx, false, sig)
-		if err != nil || resp == nil || len(resp.Value) == 0 || resp.Value[0] == nil {
-			continue
-		}
-
-		status := resp.Value[0]
-		if status.Err != nil {
-			return fmt.Errorf("transaction failed: %v", status.Err)
-		}
-		if status.ConfirmationStatus == rpc.ConfirmationStatusConfirmed ||
-			status.ConfirmationStatus == rpc.ConfirmationStatusFinalized {
-			return nil
-		}
-	}
-
-	return fmt.Errorf("transaction not confirmed after 30 attempts")
 }
 
 func borshString(s string) []byte {
