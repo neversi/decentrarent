@@ -33,6 +33,8 @@ export function useReleaseDeposit() {
         const tenant = new PublicKey(params.tenantPubkey);
         const [escrowPDA] = getEscrowPDA(landlord, tenant, params.orderId);
 
+        const latestBlockhash = await connection.getLatestBlockhash();
+
         const signature = await program.methods
           .releaseDepositToTenant()
           .accounts({
@@ -44,7 +46,10 @@ export function useReleaseDeposit() {
           .rpc();
 
         setConfirming(signature);
-        await connection.confirmTransaction(signature, 'confirmed');
+        await connection.confirmTransaction(
+          { signature, ...latestBlockhash },
+          'confirmed',
+        );
         setConfirmed();
         return signature;
       } catch (err) {

@@ -18,6 +18,8 @@ export function useLandlordSign() {
 
   const landlordSign = useCallback(
     async (params: LandlordSignParams): Promise<string> => {
+        console.log('Landlord signing with params:', params);
+
       if (!wallet) {
         setError('Wallet not connected');
         throw new Error('Wallet not connected');
@@ -29,7 +31,10 @@ export function useLandlordSign() {
       try {
         const program = getProgram(connection, wallet);
         const tenant = new PublicKey(params.tenantPubkey);
+        console.log('Landlord signing with params:', params);
         const [escrowPDA] = getEscrowPDA(wallet.publicKey, tenant, params.orderId);
+
+        const latestBlockhash = await connection.getLatestBlockhash();
 
         const signature = await program.methods
           .landlordSign()
@@ -40,7 +45,10 @@ export function useLandlordSign() {
           .rpc();
 
         setConfirming(signature);
-        await connection.confirmTransaction(signature, 'confirmed');
+        await connection.confirmTransaction(
+          { signature, ...latestBlockhash },
+          'confirmed',
+        );
         setConfirmed();
         return signature;
       } catch (err) {

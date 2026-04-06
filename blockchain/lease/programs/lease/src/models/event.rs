@@ -7,6 +7,7 @@ pub struct DepositLocked {
     pub tenant: Pubkey,
     pub deposit_amount: u64,
     pub deadline: i64,
+    pub order_id: [u8; 16],
 }
 
 #[event]

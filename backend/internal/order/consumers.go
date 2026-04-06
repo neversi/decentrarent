@@ -23,6 +23,7 @@ func NewOrderConsumers(brokers []string, service *Service) (*OrderConsumers, err
 		kafkapkg.TopicSolanaDepositLocked: oc.handleDepositLocked,
 		kafkapkg.TopicSolanaPartySigned:   oc.handlePartySigned,
 		kafkapkg.TopicSolanaEscrowExpired: oc.handleEscrowExpired,
+		kafkapkg.TopicSolanaRentPaid:      oc.handleRentPaid,
 	}
 
 	cg, err := kafkapkg.NewConsumerGroup(brokers, "order-solana-consumer", handlers)
@@ -49,9 +50,15 @@ func (oc *OrderConsumers) handleDepositLocked(_ string, value []byte) error {
 		return err
 	}
 
-	o, err := oc.service.store.FindByEscrowAddress(evt.Escrow)
+	orderID, err := uuid.FromBytes(evt.OrderId)
 	if err != nil {
-		log.Printf("[order-consumer] no order for escrow %s: %v", evt.Escrow, err)
+		log.Printf("[order-consumer] invalid order_id in deposit_locked event: %v", err)
+		return nil
+	}
+
+	o, err := oc.service.store.GetByID(orderID.String())
+	if err != nil {
+		log.Printf("[order-consumer] no order for id %s: %v", orderID, err)
 		return nil
 	}
 
@@ -65,7 +72,12 @@ func (oc *OrderConsumers) handleDepositLocked(_ string, value []byte) error {
 	}
 	o.EscrowStatus = StatusAwaitingSignatures
 
-	oc.service.publishCentrifugoOrderUpdate(o, "deposit_locked")
+	if err := oc.service.store.UpdateEscrowAddress(o.ID, evt.Escrow); err != nil {
+		return err
+	}
+	o.EscrowAddress = evt.Escrow
+
+	oc.service.publishCentrifugoOrderUpdate(o, "deposit_locked", evt.TxSignature)
 	oc.service.publishOrderEvent(kafkapkg.TopicOrderCreated, o)
 
 	log.Printf("[order-consumer] deposit locked for order %s (tx: %s), now awaiting_signatures", o.ID, evt.TxSignature)
@@ -94,12 +106,12 @@ func (oc *OrderConsumers) handlePartySigned(_ string, value []byte) error {
 		if err := oc.service.store.UpdateTenantSigned(o.ID, true); err != nil {
 			return err
 		}
-		o.TenantSigned = true
+		o.TenantSignedOnchain = true
 	case "landlord":
 		if err := oc.service.store.UpdateLandlordSigned(o.ID, true); err != nil {
 			return err
 		}
-		o.LandlordSigned = true
+		o.LandlordSignedOnchain = true
 	default:
 		log.Printf("[order-consumer] unknown role %s for escrow %s", evt.Role, evt.Escrow)
 		return nil
@@ -111,26 +123,53 @@ func (oc *OrderConsumers) handlePartySigned(_ string, value []byte) error {
 		PropertyID:     o.PropertyID,
 		TenantWallet:   o.TenantID,
 		LandlordWallet: o.LandlordID,
-		SignedBy:        evt.Signer,
-		Role:            evt.Role,
-		BothSigned:      o.TenantSigned && o.LandlordSigned,
-		Timestamp:       time.Now(),
+		SignedBy:       evt.Signer,
+		Role:           evt.Role,
+		BothSigned:     o.TenantSignedOnchain && o.LandlordSignedOnchain,
+		Timestamp:      time.Now(),
 	}
 	oc.service.producer.Publish(context.Background(), kafkapkg.TopicOrderSigned, o.ID, signEvt)
-	oc.service.publishCentrifugoOrderUpdate(o, "party_signed")
+	oc.service.publishCentrifugoOrderUpdate(o, "party_signed", evt.TxSignature)
 
-	if o.TenantSigned && o.LandlordSigned {
+	if o.TenantSignedOnchain && o.LandlordSignedOnchain {
 		if err := oc.service.store.UpdateStatus(o.ID, StatusActive, "system", "both parties signed on-chain"); err != nil {
 			return err
 		}
 		o.EscrowStatus = StatusActive
 		oc.service.publishOrderEvent(kafkapkg.TopicOrderActivated, o)
-		oc.service.publishCentrifugoOrderUpdate(o, "order_activated")
+		oc.service.publishCentrifugoOrderUpdate(o, "order_activated", evt.TxSignature)
 		log.Printf("[order-consumer] order %s activated — both parties signed (tx: %s)", o.ID, evt.TxSignature)
 	} else {
 		log.Printf("[order-consumer] %s signed order %s (tx: %s)", evt.Role, o.ID, evt.TxSignature)
 	}
 
+	return nil
+}
+
+func (oc *OrderConsumers) handleRentPaid(_ string, value []byte) error {
+	var evt kafkapkg.SolanaRentPaidEvent
+	if err := json.Unmarshal(value, &evt); err != nil {
+		return err
+	}
+
+	o, err := oc.service.store.FindByEscrowAddress(evt.Escrow)
+	if err != nil {
+		log.Printf("[order-consumer] no order for escrow %s: %v", evt.Escrow, err)
+		return nil
+	}
+
+	payment := &RentPayment{
+		OrderID:     o.ID,
+		PaidAt:      time.Unix(evt.PaidAt, 0).UTC(),
+		Transaction: evt.TxSignature,
+		PaidAmount:  int64(evt.Amount),
+	}
+	if _, err := oc.service.store.AddRentPayment(payment); err != nil {
+		return err
+	}
+
+	oc.service.publishCentrifugoOrderUpdate(o, "rent_paid", evt.TxSignature)
+	log.Printf("[order-consumer] rent paid for order %s amount=%d (tx: %s)", o.ID, evt.Amount, evt.TxSignature)
 	return nil
 }
 
@@ -152,7 +191,7 @@ func (oc *OrderConsumers) handleEscrowExpired(_ string, value []byte) error {
 	o.EscrowStatus = StatusExpired
 
 	oc.service.publishOrderEvent(kafkapkg.TopicOrderExpired, o)
-	oc.service.publishCentrifugoOrderUpdate(o, "order_expired")
+	oc.service.publishCentrifugoOrderUpdate(o, "order_expired", evt.TxSignature)
 
 	log.Printf("[order-consumer] order %s expired (tx: %s)", o.ID, evt.TxSignature)
 	return nil

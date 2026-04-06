@@ -5,20 +5,21 @@ import { getProgram } from '../program';
 import { getEscrowPDA } from '../pda';
 import { useTxStore } from '../store';
 
-interface ExpireEscrowParams {
+interface ResolveDisputeLandlordParams {
   landlordPubkey: string;
   tenantPubkey: string;
   orderId: string;
+  reason: string;
 }
 
-export function useExpireEscrow() {
+export function useResolveDisputeLandlord() {
   const { connection } = useConnection();
   const wallet = useAnchorWallet();
   const { txState, setSigning, setConfirming, setConfirmed, setError, reset } =
     useTxStore();
 
-  const expireEscrow = useCallback(
-    async (params: ExpireEscrowParams): Promise<string> => {
+  const resolveDisputeLandlord = useCallback(
+    async (params: ResolveDisputeLandlordParams): Promise<string> => {
       if (!wallet) {
         setError('Wallet not connected');
         throw new Error('Wallet not connected');
@@ -36,10 +37,11 @@ export function useExpireEscrow() {
         const latestBlockhash = await connection.getLatestBlockhash();
 
         const signature = await program.methods
-          .expireEscrow()
+          .resolveDisputeLandlord(params.reason)
           .accounts({
             authority: wallet.publicKey,
             tenant,
+            landlord,
             escrow: escrowPDA,
           })
           .rpc();
@@ -61,5 +63,5 @@ export function useExpireEscrow() {
     [connection, wallet, setSigning, setConfirming, setConfirmed, setError, reset],
   );
 
-  return { expireEscrow, txState };
+  return { resolveDisputeLandlord, txState };
 }

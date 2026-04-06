@@ -53,16 +53,16 @@ func (s *Store) Create(o *Order) (*Order, error) {
 func (s *Store) GetByID(id string) (*Order, error) {
 	o := &Order{}
 	err := s.db.QueryRow(
-		`SELECT id, conversation_id, property_id, tenant_id, landlord_id, created_by,
-		        deposit_amount, rent_amount, token_mint, escrow_status, escrow_address,
-		        tenant_signed, landlord_signed, sign_deadline, rent_start_date, rent_end_date,
-		        dispute_reason, created_at, updated_at
-		 FROM orders WHERE id = $1`, id,
+		`SELECT o.id, o.conversation_id, o.property_id, o.tenant_id, o.landlord_id, o.created_by,
+	                 o.deposit_amount, o.rent_amount, o.token_mint, o.escrow_status, o.escrow_address,
+	                 o.tenant_signed, o.landlord_signed, o.sign_deadline, o.rent_start_date, o.rent_end_date,
+					 o.dispute_reason, o.created_at, o.updated_at, o.landlord_signed_onchain, o.tenant_signed_onchain, u.wallet_address, u2.wallet_address
+	          FROM orders o LEFT JOIN users u ON o.landlord_id = u.id LEFT JOIN users u2 ON o.tenant_id = u2.id WHERE o.id = $1`, id,
 	).Scan(
 		&o.ID, &o.ConversationID, &o.PropertyID, &o.TenantID, &o.LandlordID, &o.CreatedBy,
 		&o.DepositAmount, &o.RentAmount, &o.TokenMint, &o.EscrowStatus, &o.EscrowAddress,
 		&o.TenantSigned, &o.LandlordSigned, &o.SignDeadline, &o.RentStartDate, &o.RentEndDate,
-		&o.DisputeReason, &o.CreatedAt, &o.UpdatedAt,
+		&o.DisputeReason, &o.CreatedAt, &o.UpdatedAt, &o.LandlordSignedOnchain, &o.TenantSignedOnchain, &o.LandlordPK, &o.TenantPK,
 	)
 	if err != nil {
 		return nil, err
@@ -73,11 +73,11 @@ func (s *Store) GetByID(id string) (*Order, error) {
 // ─── List ───────────────────────────────────────────────────────────
 
 func (s *Store) List(f *ListFilter) ([]Order, error) {
-	query := `SELECT id, conversation_id, property_id, tenant_id, landlord_id, created_by,
-	                 deposit_amount, rent_amount, token_mint, escrow_status, escrow_address,
-	                 tenant_signed, landlord_signed, sign_deadline, rent_start_date, rent_end_date,
-	                 dispute_reason, created_at, updated_at
-	          FROM orders WHERE 1=1`
+	query := `SELECT o.id, o.conversation_id, o.property_id, o.tenant_id, o.landlord_id, o.created_by,
+	                 o.deposit_amount, o.rent_amount, o.token_mint, o.escrow_status, o.escrow_address,
+	                 o.tenant_signed, o.landlord_signed, o.sign_deadline, o.rent_start_date, o.rent_end_date,
+					 o.dispute_reason, o.created_at, o.updated_at, o.landlord_signed_onchain, o.tenant_signed_onchain, u.wallet_address, u2.wallet_address
+	          FROM orders o LEFT JOIN users u ON o.landlord_id = u.id LEFT JOIN users u2 ON o.tenant_id = u2.id WHERE 1=1`
 	args := []interface{}{}
 	argIdx := 1
 
@@ -132,7 +132,7 @@ func (s *Store) List(f *ListFilter) ([]Order, error) {
 			&o.ID, &o.ConversationID, &o.PropertyID, &o.TenantID, &o.LandlordID, &o.CreatedBy,
 			&o.DepositAmount, &o.RentAmount, &o.TokenMint, &o.EscrowStatus, &o.EscrowAddress,
 			&o.TenantSigned, &o.LandlordSigned, &o.SignDeadline, &o.RentStartDate, &o.RentEndDate,
-			&o.DisputeReason, &o.CreatedAt, &o.UpdatedAt,
+			&o.DisputeReason, &o.CreatedAt, &o.UpdatedAt, &o.LandlordSignedOnchain, &o.TenantSignedOnchain, &o.LandlordPK, &o.TenantPK,
 		); err != nil {
 			return nil, err
 		}
@@ -147,7 +147,7 @@ func (s *Store) ListByParticipant(userID string, limit, offset int) ([]Order, er
 	query := `SELECT id, conversation_id, property_id, tenant_id, landlord_id, created_by,
 	                 deposit_amount, rent_amount, token_mint, escrow_status, escrow_address,
 	                 tenant_signed, landlord_signed, sign_deadline, rent_start_date, rent_end_date,
-	                 dispute_reason, created_at, updated_at
+	                 dispute_reason, created_at, updated_at, landlord_signed_onchain, tenant_signed_onchain
 	          FROM orders
 	          WHERE tenant_id = $1 OR landlord_id = $1
 	          ORDER BY created_at DESC
@@ -166,7 +166,7 @@ func (s *Store) ListByParticipant(userID string, limit, offset int) ([]Order, er
 			&o.ID, &o.ConversationID, &o.PropertyID, &o.TenantID, &o.LandlordID, &o.CreatedBy,
 			&o.DepositAmount, &o.RentAmount, &o.TokenMint, &o.EscrowStatus, &o.EscrowAddress,
 			&o.TenantSigned, &o.LandlordSigned, &o.SignDeadline, &o.RentStartDate, &o.RentEndDate,
-			&o.DisputeReason, &o.CreatedAt, &o.UpdatedAt,
+			&o.DisputeReason, &o.CreatedAt, &o.UpdatedAt, &o.LandlordSignedOnchain, &o.TenantSignedOnchain,
 		); err != nil {
 			return nil, err
 		}
@@ -183,13 +183,13 @@ func (s *Store) FindByEscrowAddress(escrowAddress string) (*Order, error) {
 		`SELECT id, conversation_id, property_id, tenant_id, landlord_id, created_by,
 		        deposit_amount, rent_amount, token_mint, escrow_status, escrow_address,
 		        tenant_signed, landlord_signed, sign_deadline, rent_start_date, rent_end_date,
-		        dispute_reason, created_at, updated_at
+		        dispute_reason, created_at, updated_at, landlord_signed_onchain, tenant_signed_onchain
 		 FROM orders WHERE escrow_address = $1`, escrowAddress,
 	).Scan(
 		&o.ID, &o.ConversationID, &o.PropertyID, &o.TenantID, &o.LandlordID, &o.CreatedBy,
 		&o.DepositAmount, &o.RentAmount, &o.TokenMint, &o.EscrowStatus, &o.EscrowAddress,
 		&o.TenantSigned, &o.LandlordSigned, &o.SignDeadline, &o.RentStartDate, &o.RentEndDate,
-		&o.DisputeReason, &o.CreatedAt, &o.UpdatedAt,
+		&o.DisputeReason, &o.CreatedAt, &o.UpdatedAt, &o.LandlordSignedOnchain, &o.TenantSignedOnchain,
 	)
 	if err != nil {
 		return nil, err
@@ -214,6 +214,20 @@ func (s *Store) UpdateStatus(id, status, changedBy, reason string) error {
 	}
 
 	s.addHistory(id, old.EscrowStatus, status, changedBy, reason)
+	return nil
+}
+
+// ─── UpdateEscrowAddress ───────────────────────────────────────────
+
+func (s *Store) UpdateEscrowAddress(id, escrowAddress string) error {
+	_, err := s.db.Exec(
+		`UPDATE orders SET escrow_address = $1, updated_at = $2 WHERE id = $3`,
+		escrowAddress, time.Now(), id,
+	)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -302,12 +316,11 @@ func (s *Store) GetHistory(orderID string) ([]StatusHistory, error) {
 
 func (s *Store) AddRentPayment(p *RentPayment) (*RentPayment, error) {
 	p.ID = uuid.New().String()
-	p.CreatedAt = time.Now()
 
 	_, err := s.db.Exec(
-		`INSERT INTO rent_payments (id, order_id, paid_by, amount, tx_hash, period_start, period_end, created_at)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-		p.ID, p.OrderID, p.PaidBy, p.Amount, p.TxHash, p.PeriodStart, p.PeriodEnd, p.CreatedAt,
+		`INSERT INTO rent_payments (id, order_id, paid_at, transaction, paid_amount)
+		 VALUES ($1,$2,$3,$4,$5)`,
+		p.ID, p.OrderID, p.PaidAt, p.Transaction, p.PaidAmount,
 	)
 	if err != nil {
 		return nil, err
@@ -319,10 +332,10 @@ func (s *Store) AddRentPayment(p *RentPayment) (*RentPayment, error) {
 
 func (s *Store) GetRentPayments(orderID string) ([]RentPayment, error) {
 	rows, err := s.db.Query(
-		`SELECT id, order_id, paid_by, amount, tx_hash, period_start, period_end, created_at
+		`SELECT id, order_id, paid_at, transaction, paid_amount
 		 FROM rent_payments
 		 WHERE order_id = $1
-		 ORDER BY period_start ASC`, orderID,
+		 ORDER BY paid_at ASC`, orderID,
 	)
 	if err != nil {
 		return nil, err
@@ -332,7 +345,7 @@ func (s *Store) GetRentPayments(orderID string) ([]RentPayment, error) {
 	var payments []RentPayment
 	for rows.Next() {
 		var p RentPayment
-		if err := rows.Scan(&p.ID, &p.OrderID, &p.PaidBy, &p.Amount, &p.TxHash, &p.PeriodStart, &p.PeriodEnd, &p.CreatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.OrderID, &p.PaidAt, &p.Transaction, &p.PaidAmount); err != nil {
 			return nil, err
 		}
 		payments = append(payments, p)

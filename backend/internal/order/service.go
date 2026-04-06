@@ -96,7 +96,7 @@ func (s *Service) CreateOrder(callerID string, req *CreateOrderRequest) (*Order,
 	}
 
 	s.publishOrderEvent(kafka.TopicOrderCreated, created)
-	s.publishCentrifugoOrderUpdate(created, "order_created")
+	s.publishCentrifugoOrderUpdate(created, "order_created", "")
 	return created, nil
 }
 
@@ -124,7 +124,7 @@ func (s *Service) AcceptOrder(orderID, userID string) (*Order, error) {
 		}
 		o.LandlordSigned = true
 
-		s.publishCentrifugoOrderUpdate(o, "order_accepted")
+		s.publishCentrifugoOrderUpdate(o, "order_accepted", "")
 	case o.TenantID:
 		// Tenant accepts the order, waiting for landlord to accept
 		if err := s.store.UpdateTenantSigned(o.ID, true); err != nil {
@@ -132,7 +132,7 @@ func (s *Service) AcceptOrder(orderID, userID string) (*Order, error) {
 		}
 		o.TenantSigned = true
 
-		s.publishCentrifugoOrderUpdate(o, "order_accepted")
+		s.publishCentrifugoOrderUpdate(o, "order_accepted", "")
 	}
 
 	if o.TenantSigned && o.LandlordSigned {
@@ -140,7 +140,7 @@ func (s *Service) AcceptOrder(orderID, userID string) (*Order, error) {
 			return nil, err
 		}
 		o.EscrowStatus = StatusAwaitingDeposit
-		s.publishCentrifugoOrderUpdate(o, "order_both_accepted")
+		s.publishCentrifugoOrderUpdate(o, "order_both_accepted", "")
 
 	}
 
@@ -168,13 +168,13 @@ func (s *Service) RejectOrder(orderID, userID string) (*Order, error) {
 	}
 	o.EscrowStatus = StatusRejected
 
-	s.publishCentrifugoOrderUpdate(o, "order_rejected")
+	s.publishCentrifugoOrderUpdate(o, "order_rejected", "")
 	return o, nil
 }
 
 // ─── helpers ────────────────────────────────────────────────────────
 
-func (s *Service) publishCentrifugoOrderUpdate(o *Order, eventType string) {
+func (s *Service) publishCentrifugoOrderUpdate(o *Order, eventType string, tx string) {
 	if s.centrifugo == nil {
 		return
 	}
@@ -185,6 +185,7 @@ func (s *Service) publishCentrifugoOrderUpdate(o *Order, eventType string) {
 		"order_id": o.ID,
 		"status":   o.EscrowStatus,
 		"order":    o,
+		"tx":       tx,
 	}
 
 	if err := s.centrifugo.PublishJSON(channel, payload); err != nil {

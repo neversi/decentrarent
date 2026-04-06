@@ -46,25 +46,29 @@ var AllowedTransitions = map[string][]string{
 // ─── Order entity ───────────────────────────────────────────────────
 
 type Order struct {
-	ID             string    `json:"id"`
-	ConversationID string    `json:"conversation_id"`
-	PropertyID     string    `json:"property_id"`
-	TenantID       string    `json:"tenant_id"`
-	LandlordID     string    `json:"landlord_id"`
-	CreatedBy      string    `json:"created_by"`
-	DepositAmount  int64     `json:"deposit_amount"`
-	RentAmount     int64     `json:"rent_amount"`
-	TokenMint      string    `json:"token_mint"`
-	EscrowStatus   string    `json:"escrow_status"`
-	EscrowAddress  string    `json:"escrow_address"`
-	TenantSigned   bool      `json:"tenant_signed"`
-	LandlordSigned bool      `json:"landlord_signed"`
-	SignDeadline   time.Time `json:"sign_deadline"`
-	RentStartDate  time.Time `json:"rent_start_date"`
-	RentEndDate    time.Time `json:"rent_end_date"`
-	DisputeReason  string    `json:"dispute_reason"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	ID                    string    `json:"id"`
+	ConversationID        string    `json:"conversation_id"`
+	PropertyID            string    `json:"property_id"`
+	TenantID              string    `json:"tenant_id"`
+	LandlordID            string    `json:"landlord_id"`
+	CreatedBy             string    `json:"created_by"`
+	DepositAmount         int64     `json:"deposit_amount"`
+	RentAmount            int64     `json:"rent_amount"`
+	TokenMint             string    `json:"token_mint"`
+	EscrowStatus          string    `json:"escrow_status"`
+	EscrowAddress         string    `json:"escrow_address"`
+	TenantSigned          bool      `json:"tenant_signed"`
+	LandlordSigned        bool      `json:"landlord_signed"`
+	SignDeadline          time.Time `json:"sign_deadline"`
+	RentStartDate         time.Time `json:"rent_start_date"`
+	RentEndDate           time.Time `json:"rent_end_date"`
+	DisputeReason         string    `json:"dispute_reason"`
+	CreatedAt             time.Time `json:"created_at"`
+	UpdatedAt             time.Time `json:"updated_at"`
+	LandlordPK            string    `json:"landlord_pk"`
+	TenantPK              string    `json:"tenant_pk"`
+	LandlordSignedOnchain bool      `json:"landlord_signed_onchain"`
+	TenantSignedOnchain   bool      `json:"tenant_signed_onchain"`
 }
 
 // ─── Status history ─────────────────────────────────────────────────
@@ -84,12 +88,9 @@ type StatusHistory struct {
 type RentPayment struct {
 	ID          string    `json:"id"`
 	OrderID     string    `json:"order_id"`
-	PaidBy      string    `json:"paid_by"`
-	Amount      int64     `json:"amount"`
-	TxHash      string    `json:"tx_hash"`
-	PeriodStart time.Time `json:"period_start"`
-	PeriodEnd   time.Time `json:"period_end"`
-	CreatedAt   time.Time `json:"created_at"`
+	PaidAt      time.Time `json:"paid_at"`
+	Transaction string    `json:"transaction"`
+	PaidAmount  int64     `json:"paid_amount"`
 }
 
 // ─── Request / Response DTOs ────────────────────────────────────────

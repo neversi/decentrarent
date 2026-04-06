@@ -31,6 +31,8 @@ export function useTenantSign() {
         const landlord = new PublicKey(params.landlordPubkey);
         const [escrowPDA] = getEscrowPDA(landlord, wallet.publicKey, params.orderId);
 
+        const latestBlockhash = await connection.getLatestBlockhash();
+
         const signature = await program.methods
           .tenantSign()
           .accounts({
@@ -40,7 +42,10 @@ export function useTenantSign() {
           .rpc();
 
         setConfirming(signature);
-        await connection.confirmTransaction(signature, 'confirmed');
+        await connection.confirmTransaction(
+          { signature, ...latestBlockhash },
+          'confirmed',
+        );
         setConfirmed();
         return signature;
       } catch (err) {

@@ -1,0 +1,2 @@
+ALTER TABLE orders ADD COLUMN landlord_signed_onchain BOOLEAN DEFAULT FALSE;
+ALTER TABLE orders ADD COLUMN tenant_signed_onchain BOOLEAN DEFAULT FALSE;

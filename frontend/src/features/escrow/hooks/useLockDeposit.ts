@@ -12,6 +12,10 @@ interface LockDepositParams {
   authorityPubkey: string;
   depositLamports: number;
   deadlineTs: number;
+  period: number;
+  startDate: number;
+  endDate: number;
+  priceRent: number;
 }
 
 export function useLockDeposit() {
@@ -30,6 +34,8 @@ export function useLockDeposit() {
       reset();
       setSigning();
 
+      console.log('Locking deposit with params:', params);
+
       try {
         const program = getProgram(connection, wallet);
         const landlord = new PublicKey(params.landlordPubkey);
@@ -37,11 +43,17 @@ export function useLockDeposit() {
         const orderIdBytes = uuidToBytes(params.orderId);
         const [escrowPDA] = getEscrowPDA(landlord, wallet.publicKey, params.orderId);
 
+        const latestBlockhash = await connection.getLatestBlockhash();
+
         const signature = await program.methods
           .lockDeposit(
             Array.from(orderIdBytes) as unknown as number[],
             new BN(params.depositLamports),
             new BN(params.deadlineTs),
+            new BN(params.period),
+            new BN(params.startDate),
+            new BN(params.endDate),
+            new BN(params.priceRent),
           )
           .accounts({
             tenant: wallet.publicKey,
@@ -52,7 +64,10 @@ export function useLockDeposit() {
           .rpc();
 
         setConfirming(signature);
-        await connection.confirmTransaction(signature, 'confirmed');
+        await connection.confirmTransaction(
+          { signature, ...latestBlockhash },
+          'confirmed',
+        );
         setConfirmed();
         return signature;
       } catch (err) {

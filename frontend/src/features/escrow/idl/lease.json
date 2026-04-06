@@ -208,6 +208,22 @@
         {
           "name": "deadline_ts",
           "type": "i64"
+        },
+        {
+          "name": "period",
+          "type": "i64"
+        },
+        {
+          "name": "start_date",
+          "type": "i64"
+        },
+        {
+          "name": "end_date",
+          "type": "i64"
+        },
+        {
+          "name": "price_rent",
+          "type": "u64"
         }
       ]
     },
@@ -765,6 +781,26 @@
       "code": 6008,
       "name": "ReasonTooLong",
       "msg": "Reason too long (max 200 chars)"
+    },
+    {
+      "code": 6009,
+      "name": "InvalidEndDate",
+      "msg": "Invalid end date"
+    },
+    {
+      "code": 6010,
+      "name": "InvalidTimestamp",
+      "msg": "Invalid timestamp"
+    },
+    {
+      "code": 6011,
+      "name": "InvalidPeriod",
+      "msg": "Invalid period"
+    },
+    {
+      "code": 6012,
+      "name": "RentOverpaid",
+      "msg": "Rent overpaid"
     }
   ],
   "types": [
@@ -792,6 +828,15 @@
           {
             "name": "deadline",
             "type": "i64"
+          },
+          {
+            "name": "order_id",
+            "type": {
+              "array": [
+                "u8",
+                16
+              ]
+            }
           }
         ]
       }
@@ -918,6 +963,22 @@
           {
             "name": "bump",
             "type": "u8"
+          },
+          {
+            "name": "period",
+            "type": "i64"
+          },
+          {
+            "name": "start_date",
+            "type": "i64"
+          },
+          {
+            "name": "end_date",
+            "type": "i64"
+          },
+          {
+            "name": "price_rent",
+            "type": "u64"
           }
         ]
       }

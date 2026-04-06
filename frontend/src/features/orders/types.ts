@@ -16,6 +16,8 @@ export interface Order {
   property_id: string;
   tenant_id: string;
   landlord_id: string;
+  landlord_pk: string;
+  tenant_pk: string;
   created_by: string;
   deposit_amount: number;
   rent_amount: number;
@@ -30,6 +32,8 @@ export interface Order {
   dispute_reason: string;
   created_at: string;
   updated_at: string;
+  tenant_signed_onchain: boolean;
+  landlord_signed_onchain: boolean;
 }
 
 export interface CreateOrderRequest {

@@ -31,6 +31,14 @@ tasks:
     dir: blockchain/lease
     cmd: anchor deploy
 
+  upgrade:
+    desc: Upgrade existing contract on devnet
+    dir: blockchain/lease
+    cmds:
+      - anchor build
+      - anchor upgrade target/deploy/lease.so --program-id GNAZzNcftcRNMtjETiXupfpUqPmwQyhNCrTJeiZFkpWY
+      - task: idl:copy
+
   anchor:test:
     desc: Run Anchor integration tests
     dir: blockchain/lease
@@ -74,6 +82,10 @@ tasks:
       - migrate create -ext sql -dir backend/migrations -seq {{.NAME}}
     requires:
       vars: [NAME]
+
+  backend:migrate:install:
+    desc: Install migrate CLI tool
+    cmd: go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
 
   backend:migrate:up:
     desc: Apply all pending backend SQL migrations

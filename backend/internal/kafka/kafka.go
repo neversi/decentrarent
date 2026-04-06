@@ -26,6 +26,7 @@ const (
 	TopicSolanaDepositLocked = "solana.deposit.locked"
 	TopicSolanaPartySigned   = "solana.party.signed"
 	TopicSolanaEscrowExpired = "solana.escrow.expired"
+	TopicSolanaRentPaid      = "solana.rent.paid"
 )
 
 func AllTopics() []string {
@@ -41,6 +42,7 @@ func AllTopics() []string {
 		TopicSolanaDepositLocked,
 		TopicSolanaPartySigned,
 		TopicSolanaEscrowExpired,
+		TopicSolanaRentPaid,
 	}
 }
 
@@ -112,6 +114,7 @@ type SolanaDepositLockedEvent struct {
 	Tenant        string `json:"tenant"`
 	DepositAmount uint64 `json:"deposit_amount"`
 	Deadline      int64  `json:"deadline"`
+	OrderId       []byte `json:"order_id"`
 	TxSignature   string `json:"tx_signature"`
 }
 
@@ -126,6 +129,16 @@ type SolanaEscrowExpiredEvent struct {
 	Escrow      string `json:"escrow"`
 	RefundedTo  string `json:"refunded_to"`
 	Amount      uint64 `json:"amount"`
+	TxSignature string `json:"tx_signature"`
+}
+
+type SolanaRentPaidEvent struct {
+	Escrow      string `json:"escrow"`
+	Tenant      string `json:"tenant"`
+	Landlord    string `json:"landlord"`
+	Amount      uint64 `json:"amount"`
+	TotalPaid   uint64 `json:"total_paid"`
+	PaidAt      int64  `json:"paid_at"`
 	TxSignature string `json:"tx_signature"`
 }
 

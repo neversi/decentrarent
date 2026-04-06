@@ -5,6 +5,7 @@ import { useToastStore } from '../../toast/store';
 import { useLockDeposit } from '../../escrow/hooks/useLockDeposit';
 import { useTenantSign } from '../../escrow/hooks/useTenantSign';
 import { useLandlordSign } from '../../escrow/hooks/useLandlordSign';
+import { useEscrowAccount } from '../../escrow/hooks/useEscrowAccount';
 import type { Order, OrderStatus } from '../types';
 import type { Property } from '../../properties/types';
 import { SolIcon } from '../../../components/SolIcon';
@@ -16,7 +17,14 @@ interface OrderCardProps {
   property?: Property | null;
 }
 
-const SOLSCAN_BASE = 'https://solscan.io/tx';
+const SOLSCAN_BASE = 'https://solscan.io/';
+
+const PERIOD_SECONDS: Record<string, number> = {
+  hour: 3600,
+  day: 86400,
+  week: 604800,
+  month: 2592000,
+};
 
 const statusColors: Record<OrderStatus, { bg: string; text: string; border: string }> = {
   new: { bg: 'rgba(224,120,64,0.15)', text: '#E07840', border: 'rgba(224,120,64,0.3)' },
@@ -46,12 +54,10 @@ const statusLabels: Record<OrderStatus, string> = {
 
 const TERMINAL_STATUSES: OrderStatus[] = ['rejected', 'expired', 'settled', 'dispute_resolved_tenant', 'dispute_resolved_landlord'];
 
-
 const formatDate = (dateStr: string) => {
   const d = new Date(dateStr);
   return d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
 };
-
 
 export function OrderCard({ order, onUpdated, property }: OrderCardProps) {
   const { token, user } = useAuthStore();
@@ -67,6 +73,29 @@ export function OrderCard({ order, onUpdated, property }: OrderCardProps) {
   const isTenant = currentUserId === order.tenant_id;
   const colors = statusColors[order.escrow_status];
   const isTerminal = TERMINAL_STATUSES.includes(order.escrow_status);
+
+  // Read escrow account from chain when awaiting_signatures or escrow address exists
+  const shouldReadChain =
+    order.escrow_status === 'awaiting_signatures' ||
+    (order.escrow_status === 'active' && !!order.escrow_address);
+
+  const { escrowData, refetchEscrow } = useEscrowAccount(
+    shouldReadChain ? order.landlord_pk : null,
+    shouldReadChain ? order.tenant_pk : null,
+    shouldReadChain ? order.id : null,
+  );
+
+  // Refetch on-chain data when order updates arrive (e.g. after deposit locked)
+  useEffect(() => {
+    if (shouldReadChain) {
+      refetchEscrow();
+    }
+  }, [order.escrow_status, order.escrow_address, shouldReadChain, refetchEscrow]);
+
+  // Signed state: prefer on-chain data, fall back to DB
+  const tenantSigned = escrowData?.tenantSigned ?? order.tenant_signed_onchain;
+  const landlordSigned = escrowData?.landlordSigned ?? order.landlord_signed_onchain;
+  const alreadySigned = isTenant ? tenantSigned : landlordSigned;
 
   useEffect(() => {
     if (!isTerminal) return;
@@ -104,12 +133,17 @@ export function OrderCard({ order, onUpdated, property }: OrderCardProps) {
   const handleLockDeposit = async () => {
     setLoading(true);
     try {
+      const periodSeconds = PERIOD_SECONDS[property?.period_type ?? ''] ?? PERIOD_SECONDS.month;
       await lockDeposit({
         orderId: order.id,
-        landlordPubkey: order.landlord_id,
-        authorityPubkey: order.landlord_id,
+        landlordPubkey: order.landlord_pk,
+        authorityPubkey: import.meta.env.VITE_AUTHORITY_PUBKEY as string,
         depositLamports: order.deposit_amount,
         deadlineTs: Math.floor(new Date(order.sign_deadline).getTime() / 1000),
+        period: periodSeconds,
+        startDate: Math.floor(new Date(order.rent_start_date).getTime() / 1000),
+        endDate: Math.floor(new Date(order.rent_end_date).getTime() / 1000),
+        priceRent: order.rent_amount,
       });
       addToast({ variant: 'onchain', title: 'Deposit Locked', message: 'Transaction confirmed' });
       onUpdated();
@@ -124,11 +158,12 @@ export function OrderCard({ order, onUpdated, property }: OrderCardProps) {
     setLoading(true);
     try {
       if (isTenant) {
-        await tenantSign({ landlordPubkey: order.landlord_id, orderId: order.id });
+        await tenantSign({ landlordPubkey: order.landlord_pk, orderId: order.id });
       } else {
-        await landlordSign({ tenantPubkey: order.tenant_id, orderId: order.id });
+        await landlordSign({ tenantPubkey: order.tenant_pk, orderId: order.id });
       }
       addToast({ variant: 'onchain', title: 'Order Signed', message: 'Transaction confirmed' });
+      await refetchEscrow();
       onUpdated();
     } catch (err) {
       addToast({ variant: 'error', title: 'Signing failed', message: err instanceof Error ? err.message : '' });
@@ -136,8 +171,6 @@ export function OrderCard({ order, onUpdated, property }: OrderCardProps) {
       setLoading(false);
     }
   };
-
-  const alreadySigned = isTenant ? order.tenant_signed : order.landlord_signed;
 
   if (!visible) return null;
 
@@ -189,12 +222,12 @@ export function OrderCard({ order, onUpdated, property }: OrderCardProps) {
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <span>Escrow:</span>
             <a
-              href={`${SOLSCAN_BASE}/${order.escrow_address}?cluster=devnet`}
+              href={`${SOLSCAN_BASE}/account/${order.escrow_address}?cluster=devnet`}
               target="_blank"
               rel="noopener noreferrer"
               style={{ color: '#9945FF', textDecoration: 'none', fontSize: 12 }}
             >
-              {order.escrow_address.slice(0, 4)}...{order.escrow_address.slice(-4)} \u2197
+              {order.escrow_address.slice(0, 4)}...{order.escrow_address.slice(-4)} ↗
             </a>
           </div>
         )}
@@ -202,11 +235,11 @@ export function OrderCard({ order, onUpdated, property }: OrderCardProps) {
 
       {order.escrow_status === 'awaiting_signatures' && (
         <div style={{ color: '#94a3b8', fontSize: 12, marginTop: 8 }}>
-          <span style={{ color: order.tenant_signed ? '#3DD68C' : '#E07840' }}>
-            {order.tenant_signed ? '\u2713' : '\u25CB'} Tenant
+          <span style={{ color: tenantSigned ? '#3DD68C' : '#E07840' }}>
+            {tenantSigned ? '✓' : '○'} Tenant
           </span>
-          <span style={{ marginLeft: 12, color: order.landlord_signed ? '#3DD68C' : '#E07840' }}>
-            {order.landlord_signed ? '\u2713' : '\u25CB'} Landlord
+          <span style={{ marginLeft: 12, color: landlordSigned ? '#3DD68C' : '#E07840' }}>
+            {landlordSigned ? '✓' : '○'} Landlord
           </span>
         </div>
       )}
@@ -222,7 +255,7 @@ export function OrderCard({ order, onUpdated, property }: OrderCardProps) {
                 borderRadius: 6, fontWeight: 600, fontSize: 13,
                 cursor: alreadySigned ? 'default' : 'pointer',
                 opacity: loading ? 0.6 : 1,
-              }}>{alreadySigned ? '\u2713 Accepted' : 'Accept'}</button>
+              }}>{alreadySigned ? '✓ Accepted' : 'Accept'}</button>
               <button onClick={handleReject} disabled={loading || alreadySigned} style={{
                 flex: 1, padding: 8, background: 'transparent', color: '#FF4D6A',
                 border: '1px solid #FF4D6A', borderRadius: 6, fontWeight: 600, fontSize: 13,
@@ -240,10 +273,17 @@ export function OrderCard({ order, onUpdated, property }: OrderCardProps) {
           )}
           {order.escrow_status === 'awaiting_signatures' && !alreadySigned && (
             <button onClick={handleSign} disabled={loading} style={{
-              width: '100%', padding: 8, background: '#E07840', color: '#fff',
+              width: '100%', padding: 8, background: '#9945FF', color: '#fff',
               border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 13, cursor: 'pointer',
               opacity: loading ? 0.6 : 1,
-            }}>Sign Order On-Chain</button>
+            }}>Sign On-Chain</button>
+          )}
+          {order.escrow_status === 'awaiting_signatures' && alreadySigned && (
+            <div style={{
+              width: '100%', padding: 8, background: 'rgba(153,69,255,0.1)',
+              border: '1px solid rgba(153,69,255,0.3)', borderRadius: 6,
+              color: '#9945FF', fontWeight: 600, fontSize: 13, textAlign: 'center',
+            }}>✓ Signed — awaiting other party</div>
           )}
         </div>
       )}

@@ -58,6 +58,8 @@ func decodeBody(disc [8]byte, data []byte, txSig string) (interface{}, string) {
 		return decodePartySigned(data, txSig)
 	case DiscriminatorEscrowExpired:
 		return decodeEscrowExpired(data, txSig)
+	case DiscriminatorRentPaid:
+		return decodeRentPaid(data, txSig)
 	default:
 		return nil, ""
 	}
@@ -90,6 +92,13 @@ func readI64(data []byte, offset int) (int64, int) {
 	return int64(binary.LittleEndian.Uint64(data[offset : offset+8])), offset + 8
 }
 
+func readBytes(data []byte, offset int, n int) ([]byte, int) {
+	if offset+n > len(data) {
+		return nil, offset
+	}
+	return data[offset : offset+n], offset + n
+}
+
 func readString(data []byte, offset int) (string, int) {
 	if offset+4 > len(data) {
 		return "", offset
@@ -102,14 +111,15 @@ func readString(data []byte, offset int) (string, int) {
 	return string(data[offset : offset+length]), offset + length
 }
 
-// DepositLocked: escrow(Pubkey) + landlord(Pubkey) + tenant(Pubkey) + deposit_amount(u64) + deadline(i64)
+// DepositLocked: escrow(Pubkey) + landlord(Pubkey) + tenant(Pubkey) + deposit_amount(u64) + deadline(i64) + order_id([u8; 16])
 func decodeDepositLocked(data []byte, txSig string) (*SolanaDepositLockedEvent, string) {
 	off := 0
 	escrow, off := readPubkey(data, off)
 	landlord, off := readPubkey(data, off)
 	tenant, off := readPubkey(data, off)
 	depositAmount, off := readU64(data, off)
-	deadline, _ := readI64(data, off)
+	deadline, off := readI64(data, off)
+	orderId, _ := readBytes(data, off, 16)
 
 	if escrow == "" {
 		return nil, ""
@@ -121,6 +131,7 @@ func decodeDepositLocked(data []byte, txSig string) (*SolanaDepositLockedEvent, 
 		Tenant:        tenant,
 		DepositAmount: depositAmount,
 		Deadline:      deadline,
+		OrderId:       orderId,
 		TxSignature:   txSig,
 	}, escrow
 }
@@ -140,6 +151,31 @@ func decodePartySigned(data []byte, txSig string) (*SolanaPartySignedEvent, stri
 		Escrow:      escrow,
 		Signer:      signer,
 		Role:        role,
+		TxSignature: txSig,
+	}, escrow
+}
+
+// RentPaid: escrow(Pubkey) + tenant(Pubkey) + landlord(Pubkey) + amount(u64) + total_paid(u64) + paid_at(i64)
+func decodeRentPaid(data []byte, txSig string) (*SolanaRentPaidEvent, string) {
+	off := 0
+	escrow, off := readPubkey(data, off)
+	tenant, off := readPubkey(data, off)
+	landlord, off := readPubkey(data, off)
+	amount, off := readU64(data, off)
+	totalPaid, off := readU64(data, off)
+	paidAt, _ := readI64(data, off)
+
+	if escrow == "" {
+		return nil, ""
+	}
+
+	return &SolanaRentPaidEvent{
+		Escrow:      escrow,
+		Tenant:      tenant,
+		Landlord:    landlord,
+		Amount:      amount,
+		TotalPaid:   totalPaid,
+		PaidAt:      paidAt,
 		TxSignature: txSig,
 	}, escrow
 }

@@ -81,6 +81,7 @@ pub mod lease {
             tenant: escrow.tenant,
             deposit_amount,
             deadline: deadline_ts,
+            order_id,
         });
         msg!("Deposit locked: {} lamports", deposit_amount);
 
