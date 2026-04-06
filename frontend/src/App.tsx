@@ -18,6 +18,8 @@ import ListingsPage from './pages/ListingsPage'
 import CreateListingPage from './pages/CreateListingPage'
 import PropertyDetailPage from './pages/PropertyDetailPage'
 import ProfilePage from './pages/ProfilePage'
+import OnboardingNewbiePage from './pages/OnboardingNewbiePage'
+import OnboardingWalletPage from './pages/OnboardingWalletPage'
 
 // UI
 import BottomNav from './components/Layout/BottomNav'
@@ -39,7 +41,7 @@ function HomeRedirect() {
 
 /* ─────────────────────────────────────────── */
 
-const HIDE_NAV = ['/auth']
+const HIDE_NAV = ['/auth', '/onboarding/newbie', '/onboarding/wallet']
 
 function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation()
@@ -52,6 +54,8 @@ function Layout({ children }: { children: React.ReactNode }) {
     </div>
   )
 }
+
+
 
 /* ─────────────────────────────────────────── */
 
@@ -67,6 +71,24 @@ function AppRoutes() {
         element={
           <Layout>
             <ConnectWallet />
+          </Layout>
+        }
+      />
+
+      {/* Onboarding */}
+      <Route
+        path="/onboarding/newbie"
+        element={
+          <Layout>
+            <OnboardingNewbiePage />
+          </Layout>
+        }
+      />
+      <Route
+        path="/onboarding/wallet"
+        element={
+          <Layout>
+            <OnboardingWalletPage />
           </Layout>
         }
       />

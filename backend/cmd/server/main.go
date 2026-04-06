@@ -174,6 +174,7 @@ func main() {
 		r.Use(authService.AuthMiddleware)
 		r.Post("/auth/refresh", authHandler.Refresh)
 		r.Get("/user/me", userHandler.GetMe)
+		r.Put("/user/me", userHandler.UpdateProfile)
 		r.Get("/users/{id}", userHandler.GetPublicProfile)
 
 		// Chat

@@ -41,6 +41,37 @@ func (h *Handler) GetMe(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(u)
 }
 
+// UpdateProfile godoc
+// @Summary Update user profile
+// @Description Updates the authenticated user's profile fields
+// @Tags user
+// @Security BearerAuth
+// @Param request body UpdateProfileInput true "Profile fields"
+// @Success 200 {object} User
+// @Router /user/me [put]
+func (h *Handler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
+	userID := mw.GetUserID(r.Context())
+	if userID == "" {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	var inp UpdateProfileInput
+	if err := json.NewDecoder(r.Body).Decode(&inp); err != nil {
+		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+
+	u, err := h.store.UpdateProfile(userID, inp)
+	if err != nil {
+		http.Error(w, `{"error":"failed to update profile"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(u)
+}
+
 // GetPublicProfile godoc
 // @Summary Get user public profile
 // @Description Returns a user's public profile by ID (display_name only)

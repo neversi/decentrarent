@@ -1,5 +1,6 @@
 import { NavLink, useLocation } from 'react-router-dom'
 import { useChatStore } from '../../features/chat/store'
+import { useAuthStore } from '../../features/auth/store'
 
 const tabs = [
   {
@@ -47,6 +48,8 @@ export default function BottomNav() {
   const isWideScreen = typeof window !== 'undefined' && window.innerWidth > 768
   const unreadCounts = useChatStore((s) => s.unreadCounts)
   const totalUnread = Object.values(unreadCounts).reduce((sum, n) => sum + n, 0)
+  const user = useAuthStore((s) => s.user)
+  const profileIncomplete = user ? (!user.first_name || !user.last_name || !user.email) : false
 
   return (
     <nav
@@ -97,6 +100,15 @@ export default function BottomNav() {
                   }}>
                     {totalUnread > 99 ? '99+' : totalUnread}
                   </div>
+                )}
+                {t.to === '/profile' && profileIncomplete && (
+                  <div style={{
+                    position: 'absolute', top: -2, right: -4,
+                    width: 8, height: 8, borderRadius: '50%',
+                    background: '#FF4D6A',
+                    border: '2px solid rgba(12,12,14,0.94)',
+                    boxShadow: '0 0 6px rgba(255,77,106,0.5)',
+                  }} />
                 )}
               </div>
               <span

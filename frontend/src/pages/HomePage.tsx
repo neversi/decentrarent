@@ -77,9 +77,32 @@ export default function HomePage() {
     }
   }
 
+  const [walletCopied, setWalletCopied] = useState(false)
+
+  // Deterministic owl avatar based on user ID
+  const owlIndex = user ? (user.id.charCodeAt(0) + user.id.charCodeAt(1)) % 20 + 1 : 1
+  const owlFile = owlIndex === 10
+    ? `Owl - All versions-${String(owlIndex).padStart(2, '0')}.jpg`
+    : `Owl - All versions-${String(owlIndex).padStart(2, '0')}.png`
+
   if (!user) return <div style={{ padding: '20px', color: '#ddd' }}>Loading your dashboard...</div>
 
-  const firstName = user.display_name ?? user.wallet_address.slice(0, 8)
+  const displayName = user.display_name || user.wallet_address?.slice(0, 8) || 'User'
+  const walletShort = user.wallet_address
+    ? `${user.wallet_address.slice(0, 6)}...${user.wallet_address.slice(-4)}`
+    : ''
+
+  const handleCopyWallet = () => {
+    if (!user.wallet_address) return
+    navigator.clipboard.writeText(user.wallet_address)
+    setWalletCopied(true)
+    setTimeout(() => setWalletCopied(false), 2000)
+  }
+
+  // Time-based greeting
+  const hour = new Date().getHours()
+  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
+
   const totalListings = listings.length
   const assetsRented = listings.filter(l => l.status === 'rented').length
   const totalMonthlyIncome = orders
@@ -91,26 +114,65 @@ export default function HomePage() {
 
   return (
     <div style={{ padding: '0 20px 100px', background: 'transparent' }}>
-      {/* Header with greeting */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '56px 0 32px' }}>
+      {/* Header with greeting + avatar */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '48px 0 28px' }}>
         <div>
-          <p style={{ color: '#8A8A9A', fontSize: 13, marginBottom: 3, fontWeight: 500 }}>Good morning</p>
-          <h1 style={{ fontFamily: "'Syne', sans-serif", fontSize: 32, fontWeight: 800, letterSpacing: '-0.02em', background: 'linear-gradient(135deg, #F0F0F5, #B0B0BA)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-            {firstName}
+          <p style={{ color: '#7A7A8A', fontSize: 13, marginBottom: 4, fontWeight: 500 }}>{greeting}</p>
+          <h1 style={{
+            fontFamily: "'Syne', sans-serif", fontSize: 28, fontWeight: 800,
+            letterSpacing: '-0.02em', marginBottom: 6,
+            background: 'linear-gradient(135deg, #F0F0F5, #B0B0BA)',
+            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text',
+          }}>
+            @{displayName}
           </h1>
+          {/* Copyable wallet address */}
+          {user.wallet_address && (
+            <button
+              onClick={handleCopyWallet}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                padding: '4px 10px', borderRadius: 8,
+                background: walletCopied ? 'rgba(61,214,140,0.1)' : 'rgba(255,255,255,0.04)',
+                border: `1px solid ${walletCopied ? 'rgba(61,214,140,0.25)' : 'rgba(255,255,255,0.08)'}`,
+                cursor: 'pointer', transition: 'all 0.2s',
+              }}
+            >
+              <span style={{
+                fontSize: 12, fontFamily: 'monospace', fontWeight: 500,
+                color: walletCopied ? '#3DD68C' : '#6A6A7A',
+              }}>
+                {walletCopied ? 'Copied!' : walletShort}
+              </span>
+              {!walletCopied && (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#5A5A6A" strokeWidth="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2" />
+                  <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+                </svg>
+              )}
+            </button>
+          )}
         </div>
-        <div style={{
-          width: 48, height: 48, borderRadius: '50%',
-          background: 'linear-gradient(135deg, rgba(52,199,89,0.2), rgba(52,199,89,0.1))',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 16, color: '#34C759',
-          border: '1.5px solid rgba(52,199,89,0.3)',
-          boxShadow: '0 8px 32px rgba(52,199,89,0.15), inset 0 1px 1px rgba(255,255,255,0.2)',
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
-        }}>
-          {firstName.slice(0, 2).toUpperCase()}
-        </div>
+
+        {/* Owl avatar */}
+        <Link to="/profile" style={{ textDecoration: 'none', flexShrink: 0 }}>
+          <div style={{
+            width: 52, height: 52, borderRadius: '50%', overflow: 'hidden',
+            border: '2px solid rgba(224,120,64,0.3)',
+            boxShadow: '0 4px 16px rgba(224,120,64,0.2), inset 0 1px 1px rgba(255,255,255,0.1)',
+            cursor: 'pointer', transition: 'transform 0.2s',
+          }}
+            onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.05)')}
+            onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+          >
+            <img
+              src={`/${owlFile}`}
+              alt="Avatar"
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            />
+          </div>
+        </Link>
       </div>
 
       {/* Primary Balance Card - iOS 16 Liquid Glass */}

@@ -56,7 +56,7 @@ export default function PropertyDetailPage() {
   const [orders, setOrders] = useState<Order[]>([])
   const [calendarMonth, setCalendarMonth] = useState(() => new Date())
 
-  const isOwner = user && property && user.id === property.owner_wallet
+  const isOwner = user && property && user.id === property.landlord_id
 
   useEffect(() => {
     if (!id) return

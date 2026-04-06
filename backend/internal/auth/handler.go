@@ -55,10 +55,8 @@ func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Валидация — все поля обязательны
-	if req.Username == "" || req.FirstName == "" || req.LastName == "" ||
-		req.Email == "" || req.Phone == "" || req.Password == "" {
-		http.Error(w, `{"error":"all fields are required: username, first_name, last_name, email, phone, password"}`, http.StatusBadRequest)
+	if req.Username == "" || req.Password == "" {
+		http.Error(w, `{"error":"username and password are required"}`, http.StatusBadRequest)
 		return
 	}
 
@@ -78,9 +76,9 @@ func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
 		WalletAddress: req.WalletAddress,
 	})
 	if err != nil {
-		// Проверяем конфликт уникальности (username или email уже заняты)
+		// Проверяем конфликт уникальности (username уже занято)
 		if isUniqueViolation(err) {
-			http.Error(w, `{"error":"username or email already taken"}`, http.StatusConflict)
+			http.Error(w, `{"error":"username already taken"}`, http.StatusConflict)
 			return
 		}
 		http.Error(w, `{"error":"failed to create user"}`, http.StatusInternalServerError)
