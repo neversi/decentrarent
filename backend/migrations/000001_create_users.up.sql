@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS users (
     username TEXT UNIQUE,
     first_name TEXT NOT NULL DEFAULT '',
     last_name TEXT NOT NULL DEFAULT '',
-    email TEXT UNIQUE,
+    email TEXT,
     phone TEXT,
     password_hash TEXT,
     display_name TEXT NOT NULL DEFAULT '',
