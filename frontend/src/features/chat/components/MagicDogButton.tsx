@@ -113,8 +113,8 @@ export function MagicDogButton({ orders, currentUserId, onActionComplete }: Magi
     try {
       const { order } = disputeAction;
       await openDispute({
-        landlordPubkey: order.landlord_id,
-        tenantPubkey: order.tenant_id,
+        landlordPubkey: order.landlord_pk,
+        tenantPubkey: order.tenant_pk,
         orderId: order.id,
         reason: disputeReason.trim(),
       });
