@@ -22,6 +22,7 @@ import (
 	"github.com/abdro/decentrarent/backend/internal/config"
 	"github.com/abdro/decentrarent/backend/internal/dbmigrate"
 	"github.com/abdro/decentrarent/backend/internal/egov"
+	"github.com/abdro/decentrarent/backend/internal/escrow"
 	kafkapkg "github.com/abdro/decentrarent/backend/internal/kafka"
 	"github.com/abdro/decentrarent/backend/internal/media"
 	"github.com/abdro/decentrarent/backend/internal/order"
@@ -123,6 +124,13 @@ func main() {
 		log.Println("Solana event listener started")
 	}
 
+	// ─── EscrowService  ──────────────────────────────────────
+	escrowService, err := escrow.NewService(cfg.SolanaRPCURL, cfg.AuthorityPrivateKey)
+	if err != nil {
+		log.Fatalf("Failed to init escrow service: %v", err)
+	}
+	escrowHandler := escrow.NewHandler(escrowService)
+
 	// ─── Handlers ───────────────────────────────────────────────────
 	authHandler := auth.NewHandler(authService, userStore)
 	userHandler := user.NewHandler(userStore)
@@ -205,6 +213,14 @@ func main() {
 		r.Get("/orders/{id}/payments", orderHandler.GetPayments)
 		r.Get("/orders/{id}/history", orderHandler.GetHistory)
 	})
+
+	// escrow handlers
+	r.Post("/escrow/release-to-tenant", escrowHandler.ReleaseToTenant)
+	r.Post("/escrow/release-to-landlord", escrowHandler.ReleaseToLandlord)
+	r.Post("/escrow/dispute", escrowHandler.OpenDispute)
+	r.Post("/escrow/dispute/resolve-tenant", escrowHandler.ResolveDisputeTenant)
+	r.Post("/escrow/dispute/resolve-landlord", escrowHandler.ResolveDisputeLandlord)
+	r.Post("/escrow/expire", escrowHandler.ExpireEscrow)
 
 	log.Printf("Server starting on :%s", cfg.ServerPort)
 	log.Fatal(http.ListenAndServe(":"+cfg.ServerPort, r))

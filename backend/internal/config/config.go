@@ -21,6 +21,8 @@ type Config struct {
 	KafkaBrokers        []string
 	SolanaWSURL         string
 	SolanaProgramID     string
+	SolanaRPCURL        string
+	AuthorityPrivateKey string
 }
 
 func Load() *Config {
@@ -40,6 +42,8 @@ func Load() *Config {
 		KafkaBrokers:        parseBrokers(getEnv("KAFKA_BROKERS", "localhost:9092")),
 		SolanaWSURL:         getEnv("SOLANA_WS_URL", "wss://api.devnet.solana.com"),
 		SolanaProgramID:     getEnv("SOLANA_PROGRAM_ID", "GNAZzNcftcRNMtjETiXupfpUqPmwQyhNCrTJeiZFkpWY"),
+		SolanaRPCURL:        getEnv("SOLANA_RPC_URL", "https://api.devnet.solana.com"),
+		AuthorityPrivateKey: getEnv("AUTHORITY_PRIVATE_KEY", "AShLPHQuLczQaSCNya42kEwkDUPxeEu8HeRb9tx9PnunvpZTyBFTpLdpoGiLs18idj4ZQpAGNV9mrftkDkN3Kuy"),
 	}
 }
 
