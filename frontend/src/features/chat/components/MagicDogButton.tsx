@@ -76,7 +76,7 @@ export function MagicDogButton({ orders, currentUserId, onActionComplete }: Magi
 
         case 'pay_rent':
           await payRent({
-            landlordPubkey: order.landlord_id,
+            landlordPubkey: order.landlord_pk,
             orderId: order.id,
             amountLamports: order.rent_amount,
           });

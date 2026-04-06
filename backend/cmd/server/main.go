@@ -29,6 +29,7 @@ import (
 	"github.com/abdro/decentrarent/backend/internal/property"
 	solanapkg "github.com/abdro/decentrarent/backend/internal/solana"
 	"github.com/abdro/decentrarent/backend/internal/user"
+	"github.com/abdro/decentrarent/backend/internal/worker"
 )
 
 // @title DecentraRent API
@@ -82,6 +83,7 @@ func main() {
 	propertyStore := property.NewStore(db)
 	mediaStore := media.NewStore(db)
 	orderStore := order.NewStore(db)
+	jobStore := order.NewJobStore(db)
 
 	// S3 client
 	s3Client, err := media.NewS3Client(cfg.MinioEndpoint, cfg.MinioPublicEndpoint, cfg.MinioAccessKey, cfg.MinioSecretKey, cfg.MinioBucket, cfg.MinioUseSSL)
@@ -108,8 +110,15 @@ func main() {
 		chatConsumers.Start(ctx)
 	}
 
+	// ─── EscrowService  ──────────────────────────────────────
+	escrowService, err := escrow.NewService(cfg.SolanaRPCURL, cfg.AuthorityPrivateKey)
+	if err != nil {
+		log.Fatalf("Failed to init escrow service: %v", err)
+	}
+	escrowHandler := escrow.NewHandler(escrowService)
+
 	// ─── Order Kafka consumers (Solana events) ─────────────────────
-	orderConsumers, err := order.NewOrderConsumers(cfg.KafkaBrokers, orderService)
+	orderConsumers, err := order.NewOrderConsumers(cfg.KafkaBrokers, orderService, jobStore, propertyStore)
 	if err != nil {
 		log.Printf("Warning: Order Kafka consumers not available: %v", err)
 	} else {
@@ -124,12 +133,14 @@ func main() {
 		log.Println("Solana event listener started")
 	}
 
-	// ─── EscrowService  ──────────────────────────────────────
-	escrowService, err := escrow.NewService(cfg.SolanaRPCURL, cfg.AuthorityPrivateKey)
-	if err != nil {
-		log.Fatalf("Failed to init escrow service: %v", err)
-	}
-	escrowHandler := escrow.NewHandler(escrowService)
+	// ─── Workers ───────────────────────────────────────────────────
+	escrowWorker := worker.NewEscrowWorker(jobStore, orderStore, escrowService)
+	go escrowWorker.Start(ctx)
+	log.Println("Escrow worker started")
+
+	paydueWorker := worker.NewPaydueWorker(jobStore, orderStore, chatService)
+	go paydueWorker.Start(ctx)
+	log.Println("Paydue worker started")
 
 	// ─── Handlers ───────────────────────────────────────────────────
 	authHandler := auth.NewHandler(authService, userStore)

@@ -92,10 +92,13 @@ export function OrderCard({ order, onUpdated, property }: OrderCardProps) {
     }
   }, [order.escrow_status, order.escrow_address, shouldReadChain, refetchEscrow]);
 
-  // Signed state: prefer on-chain data, fall back to DB
-  const tenantSigned = escrowData?.tenantSigned ?? order.tenant_signed_onchain;
-  const landlordSigned = escrowData?.landlordSigned ?? order.landlord_signed_onchain;
-  const alreadySigned = isTenant ? tenantSigned : landlordSigned;
+  // Off-chain accept/reject state (used for status: 'new')
+  const acceptedByMe = isTenant ? order.tenant_signed : order.landlord_signed;
+
+  // On-chain signature state (used for status: 'awaiting_signatures')
+  const tenantSignedOnchain = escrowData?.tenantSigned ?? order.tenant_signed_onchain;
+  const landlordSignedOnchain = escrowData?.landlordSigned ?? order.landlord_signed_onchain;
+  const signedOnchain = isTenant ? tenantSignedOnchain : landlordSignedOnchain;
 
   useEffect(() => {
     if (!isTerminal) return;
@@ -235,11 +238,11 @@ export function OrderCard({ order, onUpdated, property }: OrderCardProps) {
 
       {order.escrow_status === 'awaiting_signatures' && (
         <div style={{ color: '#94a3b8', fontSize: 12, marginTop: 8 }}>
-          <span style={{ color: tenantSigned ? '#3DD68C' : '#E07840' }}>
-            {tenantSigned ? '✓' : '○'} Tenant
+          <span style={{ color: tenantSignedOnchain ? '#3DD68C' : '#E07840' }}>
+            {tenantSignedOnchain ? '✓' : '○'} Tenant
           </span>
-          <span style={{ marginLeft: 12, color: landlordSigned ? '#3DD68C' : '#E07840' }}>
-            {landlordSigned ? '✓' : '○'} Landlord
+          <span style={{ marginLeft: 12, color: landlordSignedOnchain ? '#3DD68C' : '#E07840' }}>
+            {landlordSignedOnchain ? '✓' : '○'} Landlord
           </span>
         </div>
       )}
@@ -248,19 +251,19 @@ export function OrderCard({ order, onUpdated, property }: OrderCardProps) {
         <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
           {order.escrow_status === 'new' && (
             <>
-              <button onClick={handleAccept} disabled={loading || alreadySigned} style={{
-                flex: 1, padding: 8, background: alreadySigned ? 'rgba(61,214,140,0.15)' : '#3DD68C',
-                color: alreadySigned ? '#3DD68C' : '#0a0a0f',
-                border: alreadySigned ? '1px solid rgba(61,214,140,0.3)' : 'none',
+              <button onClick={handleAccept} disabled={loading || acceptedByMe} style={{
+                flex: 1, padding: 8, background: acceptedByMe ? 'rgba(61,214,140,0.15)' : '#3DD68C',
+                color: acceptedByMe ? '#3DD68C' : '#0a0a0f',
+                border: acceptedByMe ? '1px solid rgba(61,214,140,0.3)' : 'none',
                 borderRadius: 6, fontWeight: 600, fontSize: 13,
-                cursor: alreadySigned ? 'default' : 'pointer',
+                cursor: acceptedByMe ? 'default' : 'pointer',
                 opacity: loading ? 0.6 : 1,
-              }}>{alreadySigned ? '✓ Accepted' : 'Accept'}</button>
-              <button onClick={handleReject} disabled={loading || alreadySigned} style={{
+              }}>{acceptedByMe ? '✓ Accepted' : 'Accept'}</button>
+              <button onClick={handleReject} disabled={loading || acceptedByMe} style={{
                 flex: 1, padding: 8, background: 'transparent', color: '#FF4D6A',
                 border: '1px solid #FF4D6A', borderRadius: 6, fontWeight: 600, fontSize: 13,
-                cursor: alreadySigned ? 'default' : 'pointer',
-                opacity: (loading || alreadySigned) ? 0.4 : 1,
+                cursor: acceptedByMe ? 'default' : 'pointer',
+                opacity: (loading || acceptedByMe) ? 0.4 : 1,
               }}>Reject</button>
             </>
           )}
@@ -271,14 +274,14 @@ export function OrderCard({ order, onUpdated, property }: OrderCardProps) {
               opacity: loading ? 0.6 : 1,
             }}>Lock Deposit On-Chain</button>
           )}
-          {order.escrow_status === 'awaiting_signatures' && !alreadySigned && (
+          {order.escrow_status === 'awaiting_signatures' && !signedOnchain && (
             <button onClick={handleSign} disabled={loading} style={{
               width: '100%', padding: 8, background: '#9945FF', color: '#fff',
               border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 13, cursor: 'pointer',
               opacity: loading ? 0.6 : 1,
             }}>Sign On-Chain</button>
           )}
-          {order.escrow_status === 'awaiting_signatures' && alreadySigned && (
+          {order.escrow_status === 'awaiting_signatures' && signedOnchain && (
             <div style={{
               width: '100%', padding: 8, background: 'rgba(153,69,255,0.1)',
               border: '1px solid rgba(153,69,255,0.3)', borderRadius: 6,

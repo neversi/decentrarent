@@ -249,6 +249,24 @@ func (s *Store) UpdateLandlordSigned(id string, signed bool) error {
 	return err
 }
 
+// ─── UpdateSignature On Chain ────────────────────────────────────────────────
+
+func (s *Store) UpdateTenantSignedOnChain(id string, signed bool) error {
+	_, err := s.db.Exec(
+		`UPDATE orders SET tenant_signed_onchain = $1, updated_at = $2 WHERE id = $3`,
+		signed, time.Now(), id,
+	)
+	return err
+}
+
+func (s *Store) UpdateLandlordSignedOnChain(id string, signed bool) error {
+	_, err := s.db.Exec(
+		`UPDATE orders SET landlord_signed_onchain = $1, updated_at = $2 WHERE id = $3`,
+		signed, time.Now(), id,
+	)
+	return err
+}
+
 // ─── UpdateDisputeReason ────────────────────────────────────────────
 
 func (s *Store) UpdateDisputeReason(id, reason string) error {

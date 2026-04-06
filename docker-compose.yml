@@ -59,7 +59,7 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
-      interval: 5s
+      interval: 60s
       timeout: 5s
       retries: 30
       start_period: 10s

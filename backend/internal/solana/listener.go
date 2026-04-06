@@ -80,6 +80,7 @@ func (l *Listener) subscribe(ctx context.Context) error {
 		events := DecodeEvents(result.Value.Logs, txSig)
 
 		for _, evt := range events {
+			log.Printf("[solana] listened to new event: %v", evt.Payload)
 			if err := l.producer.Publish(ctx, evt.Topic, evt.Key, evt.Payload); err != nil {
 				log.Printf("[solana] failed to publish %s: %v", evt.Topic, err)
 			}

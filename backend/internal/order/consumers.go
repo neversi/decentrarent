@@ -6,18 +6,29 @@ import (
 	"log"
 	"time"
 
+	"github.com/gagliardetto/solana-go"
 	"github.com/google/uuid"
 
 	kafkapkg "github.com/abdro/decentrarent/backend/internal/kafka"
+	"github.com/abdro/decentrarent/backend/internal/property"
 )
 
-type OrderConsumers struct {
-	service *Service
-	cg      *kafkapkg.ConsumerGroup
+var periodSeconds = map[string]int64{
+	"hour":  3600,
+	"day":   86400,
+	"week":  604800,
+	"month": 2592000,
 }
 
-func NewOrderConsumers(brokers []string, service *Service) (*OrderConsumers, error) {
-	oc := &OrderConsumers{service: service}
+type OrderConsumers struct {
+	service       *Service
+	jobStore      *JobStore
+	propertyStore *property.Store
+	cg            *kafkapkg.ConsumerGroup
+}
+
+func NewOrderConsumers(brokers []string, service *Service, jobStore *JobStore, propertyStore *property.Store) (*OrderConsumers, error) {
+	oc := &OrderConsumers{service: service, jobStore: jobStore, propertyStore: propertyStore}
 
 	handlers := map[string]kafkapkg.MessageHandler{
 		kafkapkg.TopicSolanaDepositLocked: oc.handleDepositLocked,
@@ -50,6 +61,12 @@ func (oc *OrderConsumers) handleDepositLocked(_ string, value []byte) error {
 		return err
 	}
 
+	sig := solana.Signature{}
+	if evt.TxSignature == sig.String() {
+		log.Printf("[order-consumer] invalid transaction signature in party_signed event: %s", evt.TxSignature)
+		return nil
+	}
+
 	orderID, err := uuid.FromBytes(evt.OrderId)
 	if err != nil {
 		log.Printf("[order-consumer] invalid order_id in deposit_locked event: %v", err)
@@ -77,6 +94,12 @@ func (oc *OrderConsumers) handleDepositLocked(_ string, value []byte) error {
 	}
 	o.EscrowAddress = evt.Escrow
 
+	if oc.jobStore != nil {
+		if err := oc.jobStore.InsertEscrowJob(o.ID, JobTypeExpireEscrow, o.SignDeadline); err != nil {
+			log.Printf("[order-consumer] failed to insert expire_escrow job for order %s: %v", o.ID, err)
+		}
+	}
+
 	oc.service.publishCentrifugoOrderUpdate(o, "deposit_locked", evt.TxSignature)
 	oc.service.publishOrderEvent(kafkapkg.TopicOrderCreated, o)
 
@@ -88,6 +111,11 @@ func (oc *OrderConsumers) handlePartySigned(_ string, value []byte) error {
 	var evt kafkapkg.SolanaPartySignedEvent
 	if err := json.Unmarshal(value, &evt); err != nil {
 		return err
+	}
+	sig := solana.Signature{}
+	if evt.TxSignature == sig.String() {
+		log.Printf("[order-consumer] invalid transaction signature in party_signed event: %s", evt.TxSignature)
+		return nil
 	}
 
 	o, err := oc.service.store.FindByEscrowAddress(evt.Escrow)
@@ -103,12 +131,12 @@ func (oc *OrderConsumers) handlePartySigned(_ string, value []byte) error {
 
 	switch evt.Role {
 	case "tenant":
-		if err := oc.service.store.UpdateTenantSigned(o.ID, true); err != nil {
+		if err := oc.service.store.UpdateTenantSignedOnChain(o.ID, true); err != nil {
 			return err
 		}
 		o.TenantSignedOnchain = true
 	case "landlord":
-		if err := oc.service.store.UpdateLandlordSigned(o.ID, true); err != nil {
+		if err := oc.service.store.UpdateLandlordSignedOnChain(o.ID, true); err != nil {
 			return err
 		}
 		o.LandlordSignedOnchain = true
@@ -139,6 +167,28 @@ func (oc *OrderConsumers) handlePartySigned(_ string, value []byte) error {
 		oc.service.publishOrderEvent(kafkapkg.TopicOrderActivated, o)
 		oc.service.publishCentrifugoOrderUpdate(o, "order_activated", evt.TxSignature)
 		log.Printf("[order-consumer] order %s activated — both parties signed (tx: %s)", o.ID, evt.TxSignature)
+
+		if oc.jobStore != nil {
+			if err := oc.jobStore.InsertEscrowJob(o.ID, JobTypeReleaseDeposit, o.RentEndDate); err != nil {
+				log.Printf("[order-consumer] failed to insert release_deposit job for order %s: %v", o.ID, err)
+			}
+
+			var periodicity int64 = periodSeconds["month"]
+			if oc.propertyStore != nil {
+				if prop, err := oc.propertyStore.GetByID(o.PropertyID); err == nil {
+					if s, ok := periodSeconds[prop.PeriodType]; ok {
+						periodicity = s
+					}
+				} else {
+					log.Printf("[order-consumer] failed to fetch property %s for order %s: %v", o.PropertyID, o.ID, err)
+				}
+			}
+
+			firstTrigger := o.RentStartDate.Add(time.Duration(periodicity) * time.Second)
+			if err := oc.jobStore.InsertPaydueJob(o.ID, firstTrigger, periodicity); err != nil {
+				log.Printf("[order-consumer] failed to insert paydue job for order %s: %v", o.ID, err)
+			}
+		}
 	} else {
 		log.Printf("[order-consumer] %s signed order %s (tx: %s)", evt.Role, o.ID, evt.TxSignature)
 	}
@@ -150,6 +200,12 @@ func (oc *OrderConsumers) handleRentPaid(_ string, value []byte) error {
 	var evt kafkapkg.SolanaRentPaidEvent
 	if err := json.Unmarshal(value, &evt); err != nil {
 		return err
+	}
+
+	sig := solana.Signature{}
+	if evt.TxSignature == sig.String() {
+		log.Printf("[order-consumer] invalid transaction signature in party_signed event: %s", evt.TxSignature)
+		return nil
 	}
 
 	o, err := oc.service.store.FindByEscrowAddress(evt.Escrow)
@@ -177,6 +233,12 @@ func (oc *OrderConsumers) handleEscrowExpired(_ string, value []byte) error {
 	var evt kafkapkg.SolanaEscrowExpiredEvent
 	if err := json.Unmarshal(value, &evt); err != nil {
 		return err
+	}
+
+	sig := solana.Signature{}
+	if evt.TxSignature == sig.String() {
+		log.Printf("[order-consumer] invalid transaction signature in party_signed event: %s", evt.TxSignature)
+		return nil
 	}
 
 	o, err := oc.service.store.FindByEscrowAddress(evt.Escrow)
