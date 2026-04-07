@@ -2,6 +2,7 @@ package order
 
 import (
 	"encoding/json"
+	"log"
 	"math"
 	"net/http"
 	"strconv"
@@ -128,6 +129,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 
 	orders, err := h.store.List(filter)
 	if err != nil {
+		log.Printf("[orders] List error: %v", err)
 		http.Error(w, `{"error":"failed to list orders"}`, http.StatusInternalServerError)
 		return
 	}

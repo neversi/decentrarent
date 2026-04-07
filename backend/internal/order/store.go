@@ -56,7 +56,7 @@ func (s *Store) GetByID(id string) (*Order, error) {
 		`SELECT o.id, o.conversation_id, o.property_id, o.tenant_id, o.landlord_id, o.created_by,
 	                 o.deposit_amount, o.rent_amount, o.token_mint, o.escrow_status, o.escrow_address,
 	                 o.tenant_signed, o.landlord_signed, o.sign_deadline, o.rent_start_date, o.rent_end_date,
-					 o.dispute_reason, o.created_at, o.updated_at, o.landlord_signed_onchain, o.tenant_signed_onchain, u.wallet_address, u2.wallet_address
+					 o.dispute_reason, o.created_at, o.updated_at, o.landlord_signed_onchain, o.tenant_signed_onchain, COALESCE(u.wallet_address,''), COALESCE(u2.wallet_address,'')
 	          FROM orders o LEFT JOIN users u ON o.landlord_id = u.id LEFT JOIN users u2 ON o.tenant_id = u2.id WHERE o.id = $1`, id,
 	).Scan(
 		&o.ID, &o.ConversationID, &o.PropertyID, &o.TenantID, &o.LandlordID, &o.CreatedBy,
@@ -76,7 +76,7 @@ func (s *Store) List(f *ListFilter) ([]Order, error) {
 	query := `SELECT o.id, o.conversation_id, o.property_id, o.tenant_id, o.landlord_id, o.created_by,
 	                 o.deposit_amount, o.rent_amount, o.token_mint, o.escrow_status, o.escrow_address,
 	                 o.tenant_signed, o.landlord_signed, o.sign_deadline, o.rent_start_date, o.rent_end_date,
-					 o.dispute_reason, o.created_at, o.updated_at, o.landlord_signed_onchain, o.tenant_signed_onchain, u.wallet_address, u2.wallet_address
+					 o.dispute_reason, o.created_at, o.updated_at, o.landlord_signed_onchain, o.tenant_signed_onchain, COALESCE(u.wallet_address,''), COALESCE(u2.wallet_address,'')
 	          FROM orders o LEFT JOIN users u ON o.landlord_id = u.id LEFT JOIN users u2 ON o.tenant_id = u2.id WHERE 1=1`
 	args := []interface{}{}
 	argIdx := 1
