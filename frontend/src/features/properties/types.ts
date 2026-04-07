@@ -5,6 +5,7 @@ export interface Property {
   description: string;
   location: string;
   price: number;
+  deposit_price: number;
   token_mint: string;
   period_type: string;
   status: string;
@@ -25,6 +26,7 @@ export interface CreatePropertyRequest {
   description: string;
   location: string;
   price: number;
+  deposit_price: number;
   token_mint: string;
   period_type: string;
 }
@@ -34,6 +36,7 @@ export interface UpdatePropertyRequest {
   description?: string;
   location?: string;
   price?: number;
+  deposit_price?: number;
   token_mint?: string;
   period_type?: string;
 }

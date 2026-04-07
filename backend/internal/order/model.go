@@ -105,7 +105,7 @@ type CreateOrderRequest struct {
 	EscrowAddress    string `json:"escrow_address"`
 	RentStartDate    string `json:"rent_start_date"`
 	RentEndDate      string `json:"rent_end_date"`
-	SignDeadlineDays int    `json:"sign_deadline_days"`
+	SignDeadlineMinutes int `json:"sign_deadline_minutes"`
 }
 
 type SignRequest struct {

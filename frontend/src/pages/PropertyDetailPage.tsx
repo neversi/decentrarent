@@ -285,7 +285,7 @@ export default function PropertyDetailPage() {
                 <p style={{ color: '#7A7A8A', fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 2 }}>Security Deposit</p>
                 <p style={{ fontWeight: 700, fontSize: 16, display: 'flex', alignItems: 'center', gap: 4, color: '#E07840' }}>
                   <span style={{ fontSize: 11 }}>~</span>
-                  {formatPrice(property.price, property.token_mint)}
+                  {formatPrice(property.deposit_price, property.token_mint)}
                 </p>
               </div>
             </div>

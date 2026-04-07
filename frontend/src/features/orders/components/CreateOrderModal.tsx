@@ -16,6 +16,7 @@ interface CreateOrderModalProps {
 }
 
 type TokenMint = 'SOL' | 'USDC' | 'USDT';
+type DeadlineUnit = 'minutes' | 'hours' | 'days';
 
 const TOKENS: { value: TokenMint; label: string; icon: string }[] = [
   { value: 'SOL', label: 'SOL', icon: TOKEN_INFO['SOL'].icon },
@@ -23,23 +24,36 @@ const TOKENS: { value: TokenMint; label: string; icon: string }[] = [
   { value: 'USDT', label: 'USDT', icon: TOKEN_INFO['USDT'].icon },
 ];
 
+const DEADLINE_UNITS: { value: DeadlineUnit; label: string }[] = [
+  { value: 'minutes', label: 'Min' },
+  { value: 'hours', label: 'Hr' },
+  { value: 'days', label: 'Day' },
+];
+
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 export function CreateOrderModal({ conversation, property, onClose, onCreated }: CreateOrderModalProps) {
   const { token } = useAuthStore();
   const { addToast } = useToastStore();
-  const [depositAmount, setDepositAmount] = useState('');
-  const [rentAmount, setRentAmount] = useState(property ? String(property.price) : '');
+  const [depositAmount, setDepositAmount] = useState(
+    property?.deposit_price ? toDisplayAmount(property.deposit_price, property.token_mint) : ''
+  );
+  const [rentAmount, setRentAmount] = useState(
+    property ? toDisplayAmount(property.price, property.token_mint) : ''
+  );
   const [tokenMint, setTokenMint] = useState<TokenMint>(
     (property?.token_mint as TokenMint) || 'SOL'
   );
-  const [deadlineDays, setDeadlineDays] = useState('7');
+  const [deadlineValue, setDeadlineValue] = useState('7');
+  const [deadlineUnit, setDeadlineUnit] = useState<DeadlineUnit>('days');
   const [submitting, setSubmitting] = useState(false);
 
-  // Calendar state
+  // Calendar + time state
   const [calendarMonth, setCalendarMonth] = useState(() => new Date());
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
+  const [startTime, setStartTime] = useState('12:00');
+  const [endTime, setEndTime] = useState('12:00');
   const [selecting, setSelecting] = useState<'start' | 'end'>('start');
 
   const handleDayClick = (date: Date) => {
@@ -60,8 +74,27 @@ export function CreateOrderModal({ conversation, property, onClose, onCreated }:
     }
   };
 
+  const applyTime = (date: Date, time: string): Date => {
+    const [h, m] = time.split(':').map(Number);
+    const d = new Date(date);
+    d.setHours(h, m, 0, 0);
+    return d;
+  };
+
+  const deadlineToMinutes = (): number => {
+    const val = Number(deadlineValue) || 0;
+    switch (deadlineUnit) {
+      case 'minutes': return val;
+      case 'hours': return val * 60;
+      case 'days': return val * 24 * 60;
+    }
+  };
+
   const handleSubmit = async () => {
     if (!token || !depositAmount || !startDate || !endDate || !property) return;
+
+    const startWithTime = applyTime(startDate, startTime);
+    const endWithTime = applyTime(endDate, endTime);
 
     setSubmitting(true);
     try {
@@ -70,12 +103,12 @@ export function CreateOrderModal({ conversation, property, onClose, onCreated }:
         property_id: conversation.property_id,
         landlord_id: conversation.landlord_id,
         deposit_amount: toBaseUnits(Number(depositAmount), tokenMint),
-        rent_amount: property.price,
+        rent_amount: toBaseUnits(Number(rentAmount), tokenMint),
         token_mint: tokenMint,
         escrow_address: '',
-        rent_start_date: startDate.toISOString(),
-        rent_end_date: endDate.toISOString(),
-        sign_deadline_days: Number(deadlineDays),
+        rent_start_date: startWithTime.toISOString(),
+        rent_end_date: endWithTime.toISOString(),
+        sign_deadline_minutes: deadlineToMinutes(),
       }, token);
 
       addToast({ variant: 'success', title: 'Agreement Created', message: 'Waiting for response' });
@@ -184,6 +217,14 @@ export function CreateOrderModal({ conversation, property, onClose, onCreated }:
               }} onClick={() => setSelecting('start')}>
                 <p style={{ fontSize: 9, color: '#7A7A8A', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Start</p>
                 <p style={{ fontSize: 13, color: startDate ? '#3DD68C' : '#5A5A6A', fontWeight: 600 }}>{formatSelected(startDate)}</p>
+                <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)}
+                  style={{
+                    marginTop: 4, width: '100%', background: 'transparent', border: 'none',
+                    color: '#3DD68C', fontSize: 12, textAlign: 'center', outline: 'none',
+                    fontFamily: "'DM Sans',sans-serif",
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                />
               </div>
               <span style={{ color: '#5A5A6A' }}>{'\u2192'}</span>
               <div style={{
@@ -194,6 +235,14 @@ export function CreateOrderModal({ conversation, property, onClose, onCreated }:
               }} onClick={() => setSelecting('end')}>
                 <p style={{ fontSize: 9, color: '#7A7A8A', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>End</p>
                 <p style={{ fontSize: 13, color: endDate ? '#E07840' : '#5A5A6A', fontWeight: 600 }}>{formatSelected(endDate)}</p>
+                <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)}
+                  style={{
+                    marginTop: 4, width: '100%', background: 'transparent', border: 'none',
+                    color: '#E07840', fontSize: 12, textAlign: 'center', outline: 'none',
+                    fontFamily: "'DM Sans',sans-serif",
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                />
               </div>
             </div>
 
@@ -208,8 +257,29 @@ export function CreateOrderModal({ conversation, property, onClose, onCreated }:
 
           {/* Sign Deadline */}
           <div>
-            <label style={{ color: '#94a3b8', fontSize: 12, marginBottom: 4, display: 'block', fontWeight: 500 }}>Sign Deadline (days)</label>
-            <input type="number" value={deadlineDays} onChange={(e) => setDeadlineDays(e.target.value)} style={inputStyle} />
+            <label style={{ color: '#94a3b8', fontSize: 12, marginBottom: 4, display: 'block', fontWeight: 500 }}>Sign Deadline</label>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <input type="number" value={deadlineValue} onChange={(e) => setDeadlineValue(e.target.value)}
+                style={{ ...inputStyle, flex: 1 }} />
+              <div style={{ display: 'flex', gap: 4 }}>
+                {DEADLINE_UNITS.map(u => {
+                  const active = deadlineUnit === u.value;
+                  return (
+                    <button key={u.value} onClick={() => setDeadlineUnit(u.value)} style={{
+                      padding: '8px 10px', borderRadius: 8,
+                      background: active ? 'rgba(153,69,255,0.12)' : 'rgba(255,255,255,0.04)',
+                      border: `1.5px solid ${active ? 'rgba(153,69,255,0.4)' : 'rgba(255,255,255,0.08)'}`,
+                      color: active ? '#9945FF' : '#6A6A7A',
+                      fontWeight: 600, fontSize: 11, cursor: 'pointer',
+                      transition: 'all 0.2s', fontFamily: "'DM Sans',sans-serif",
+                      whiteSpace: 'nowrap',
+                    }}>
+                      {u.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
 

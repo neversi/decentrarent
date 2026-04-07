@@ -60,6 +60,38 @@ func (h *Handler) ListConversations(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(convs)
 }
 
+// GetConversation godoc
+// @Summary Get a single conversation
+// @Description Returns a conversation by ID. Accessible by participants or admins.
+// @Tags chat
+// @Security BearerAuth
+// @Produce json
+// @Param id path string true "Conversation ID"
+// @Success 200 {object} Conversation
+// @Router /conversations/{id} [get]
+func (h *Handler) GetConversation(w http.ResponseWriter, r *http.Request) {
+	userID := mw.GetUserID(r.Context())
+	if userID == "" {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	convID := chi.URLParam(r, "id")
+	conv, err := h.store.GetConversation(convID)
+	if err != nil {
+		http.Error(w, `{"error":"conversation not found"}`, http.StatusNotFound)
+		return
+	}
+
+	if conv.LandlordID != userID && conv.LoanerID != userID && !mw.GetIsAdmin(r.Context()) {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(conv)
+}
+
 // DeleteConversation godoc
 // @Summary Delete a conversation
 // @Description Deletes a conversation if the user is a participant
@@ -107,7 +139,7 @@ func (h *Handler) GetMessages(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"conversation not found"}`, http.StatusNotFound)
 		return
 	}
-	if conv.LandlordID != id && conv.LoanerID != id {
+	if conv.LandlordID != id && conv.LoanerID != id && !mw.GetIsAdmin(r.Context()) {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}

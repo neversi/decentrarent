@@ -1,0 +1,1 @@
+ALTER TABLE properties ADD COLUMN deposit_price BIGINT NOT NULL DEFAULT 0;

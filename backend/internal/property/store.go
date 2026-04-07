@@ -25,6 +25,7 @@ func (s *Store) Create(landlordID string, req *CreatePropertyRequest, verificati
 		Description:        req.Description,
 		Location:           req.Location,
 		Price:              req.Price,
+		DepositPrice:       req.DepositPrice,
 		TokenMint:          req.TokenMint,
 		PeriodType:         req.PeriodType,
 		Status:             "available",
@@ -34,9 +35,9 @@ func (s *Store) Create(landlordID string, req *CreatePropertyRequest, verificati
 	}
 
 	_, err := s.db.Exec(
-		`INSERT INTO properties (id, landlord_id, title, description, location, price, token_mint, period_type, status, verification_status, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-		p.ID, p.LandlordID, p.Title, p.Description, p.Location, p.Price, p.TokenMint, p.PeriodType, p.Status, p.VerificationStatus, p.CreatedAt, p.UpdatedAt,
+		`INSERT INTO properties (id, landlord_id, title, description, location, price, deposit_price, token_mint, period_type, status, verification_status, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+		p.ID, p.LandlordID, p.Title, p.Description, p.Location, p.Price, p.DepositPrice, p.TokenMint, p.PeriodType, p.Status, p.VerificationStatus, p.CreatedAt, p.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -47,9 +48,9 @@ func (s *Store) Create(landlordID string, req *CreatePropertyRequest, verificati
 func (s *Store) GetByID(id string) (*Property, error) {
 	p := &Property{}
 	err := s.db.QueryRow(
-		`SELECT id, landlord_id, title, description, location, price, token_mint, period_type, status, verification_status, created_at, updated_at
+		`SELECT id, landlord_id, title, description, location, price, deposit_price, token_mint, period_type, status, verification_status, created_at, updated_at
 		 FROM properties WHERE id = $1`, id,
-	).Scan(&p.ID, &p.LandlordID, &p.Title, &p.Description, &p.Location, &p.Price, &p.TokenMint, &p.PeriodType, &p.Status, &p.VerificationStatus, &p.CreatedAt, &p.UpdatedAt)
+	).Scan(&p.ID, &p.LandlordID, &p.Title, &p.Description, &p.Location, &p.Price, &p.DepositPrice, &p.TokenMint, &p.PeriodType, &p.Status, &p.VerificationStatus, &p.CreatedAt, &p.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -57,7 +58,7 @@ func (s *Store) GetByID(id string) (*Property, error) {
 }
 
 func (s *Store) List(f *ListFilter) ([]Property, error) {
-	query := `SELECT id, landlord_id, title, description, location, price, token_mint, period_type, status, verification_status, created_at, updated_at FROM properties WHERE 1=1`
+	query := `SELECT id, landlord_id, title, description, location, price, deposit_price, token_mint, period_type, status, verification_status, created_at, updated_at FROM properties WHERE 1=1`
 	args := []interface{}{}
 	argIdx := 1
 
@@ -103,7 +104,7 @@ func (s *Store) List(f *ListFilter) ([]Property, error) {
 	var props []Property
 	for rows.Next() {
 		var p Property
-		if err := rows.Scan(&p.ID, &p.LandlordID, &p.Title, &p.Description, &p.Location, &p.Price, &p.TokenMint, &p.PeriodType, &p.Status, &p.VerificationStatus, &p.CreatedAt, &p.UpdatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.LandlordID, &p.Title, &p.Description, &p.Location, &p.Price, &p.DepositPrice, &p.TokenMint, &p.PeriodType, &p.Status, &p.VerificationStatus, &p.CreatedAt, &p.UpdatedAt); err != nil {
 			return nil, err
 		}
 		props = append(props, p)
@@ -134,6 +135,11 @@ func (s *Store) Update(id string, req *UpdatePropertyRequest) (*Property, error)
 	if req.Price != nil {
 		sets = append(sets, fmt.Sprintf("price = $%d", argIdx))
 		args = append(args, *req.Price)
+		argIdx++
+	}
+	if req.DepositPrice != nil {
+		sets = append(sets, fmt.Sprintf("deposit_price = $%d", argIdx))
+		args = append(args, *req.DepositPrice)
 		argIdx++
 	}
 	if req.TokenMint != nil {

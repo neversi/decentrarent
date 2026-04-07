@@ -6,6 +6,7 @@ import { useChat } from '../hooks/useChat';
 import { useChatStore } from '../store';
 import { useAuthStore } from '../../auth/store';
 import { apiFetch } from '../../../lib/api';
+import { formatPrice } from '../../properties/utils';
 import { MessageList } from './MessageList';
 import { MessageInput } from './MessageInput';
 import { ChatBadge } from './ChatBadge';
@@ -291,7 +292,7 @@ export function ChatWindow() {
                 <span style={{ fontSize: 10, color: '#E07840' }}>↗</span>
               </p>
               <p style={{ fontSize: 11, color: '#888890', marginTop: 3 }}>
-                {property ? `${property.price} SOL/${property.period_type}` : ''}
+                {property ? `${formatPrice(property.price, property.token_mint)} ${property.token_mint}/${property.period_type}` : ''}
                 {property ? ' • ' : ''}
                 {isLandlord(selectedConversation)
                   ? `Loaner: ${shortWallet(selectedConversation.loaner_id)}`

@@ -210,6 +210,7 @@ func main() {
 		// Chat
 		r.Get("/conversations", chatHandler.ListConversations)
 		r.Post("/conversations", chatHandler.CreateConversation)
+		r.Get("/conversations/{id}", chatHandler.GetConversation)
 		r.Delete("/conversations/{id}", chatHandler.DeleteConversation)
 		r.Get("/conversations/{id}/messages", chatHandler.GetMessages)
 		r.Post("/conversations/documents", chatHandler.SendDocument)

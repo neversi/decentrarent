@@ -67,9 +67,9 @@ func (s *Service) CreateOrder(callerID string, req *CreateOrderRequest) (*Order,
 		return nil, errors.New("invalid rent_end_date format, use RFC3339")
 	}
 
-	deadlineDays := req.SignDeadlineDays
-	if deadlineDays <= 0 {
-		deadlineDays = 3
+	deadlineMinutes := req.SignDeadlineMinutes
+	if deadlineMinutes <= 0 {
+		deadlineMinutes = 3 * 24 * 60 // default 3 days
 	}
 
 	tokenMint := req.TokenMint
@@ -87,7 +87,7 @@ func (s *Service) CreateOrder(callerID string, req *CreateOrderRequest) (*Order,
 		RentAmount:     req.RentAmount,
 		TokenMint:      tokenMint,
 		EscrowAddress:  req.EscrowAddress,
-		SignDeadline:   time.Now().Add(time.Duration(deadlineDays) * 24 * time.Hour),
+		SignDeadline:   time.Now().Add(time.Duration(deadlineMinutes) * time.Minute),
 		RentStartDate:  rentStart,
 		RentEndDate:    rentEnd,
 		EscrowStatus:   StatusNew,

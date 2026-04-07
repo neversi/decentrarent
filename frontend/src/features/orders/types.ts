@@ -46,7 +46,7 @@ export interface CreateOrderRequest {
   escrow_address: string;
   rent_start_date: string;
   rent_end_date: string;
-  sign_deadline_days: number;
+  sign_deadline_minutes: number;
 }
 
 export interface OrderUpdateEvent {

@@ -20,6 +20,7 @@ interface OrderCardProps {
 const SOLSCAN_BASE = 'https://solscan.io/';
 
 const PERIOD_SECONDS: Record<string, number> = {
+  minute: 1,
   hour: 3600,
   day: 86400,
   week: 604800,

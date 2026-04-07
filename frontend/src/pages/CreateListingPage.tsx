@@ -16,6 +16,15 @@ interface ImagePreview {
   preview: string
 }
 
+type PeriodType = 'minute' | 'hour' | 'day' | 'month'
+
+const PERIOD_TYPES: { value: PeriodType; label: string }[] = [
+  { value: 'minute', label: 'Minute' },
+  { value: 'hour', label: 'Hour' },
+  { value: 'day', label: 'Day' },
+  { value: 'month', label: 'Month' },
+]
+
 interface ListingForm {
   title: string
   location: string
@@ -23,6 +32,7 @@ interface ListingForm {
   price: string
   security_deposit: string
   token_mint: TokenMint
+  period_type: PeriodType
 }
 
 export default function CreateListingPage() {
@@ -36,7 +46,7 @@ export default function CreateListingPage() {
   const [uploadProgress, setUploadProgress] = useState('')
   const [form, setForm] = useState<ListingForm>({
     title: '', location: '', description: '',
-    price: '', security_deposit: '', token_mint: 'SOL',
+    price: '', security_deposit: '', token_mint: 'SOL', period_type: 'month',
   })
 
   const set = <K extends keyof ListingForm>(k: K, v: ListingForm[K]) =>
@@ -103,6 +113,7 @@ export default function CreateListingPage() {
       return
     }
     const priceSmallest = Math.round(priceFloat * Math.pow(10, selectedToken.decimals))
+    const depositSmallest = Math.round(depositFloat * Math.pow(10, selectedToken.decimals))
 
     setSaving(true)
     setError(null)
@@ -112,8 +123,9 @@ export default function CreateListingPage() {
         description: form.description,
         location: form.location,
         price: priceSmallest,
+        deposit_price: depositSmallest,
         token_mint: form.token_mint,
-        period_type: 'month',
+        period_type: form.period_type,
       }, token)
 
       // Upload images if any
@@ -253,10 +265,22 @@ export default function CreateListingPage() {
           </div>
         </div>
 
+        {/* Rental Period */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <label style={labelStyle}>Rental period</label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {PERIOD_TYPES.map(p => (
+              <button key={p.value} onClick={() => set('period_type', p.value)} style={{ ...pillStyle(form.period_type === p.value), flex: 1 }}>
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Price + Security Deposit */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <label style={labelStyle}>Monthly rent ({form.token_mint})</label>
+            <label style={labelStyle}>Rent per {form.period_type} ({form.token_mint})</label>
             <input
               type="number" step="any" min="0"
               placeholder={form.token_mint === 'SOL' ? '0.5' : '50.00'}
@@ -297,7 +321,7 @@ export default function CreateListingPage() {
               <p style={{ fontSize: 16, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
                 <img src={TOKEN_INFO[form.token_mint]?.icon} alt="" style={{ width: 20, height: 20, borderRadius: '50%' }} />
                 {parseFloat(form.price) || 0} {form.token_mint}
-                <span style={{ color: '#6A6A7A', fontWeight: 400, fontSize: 13 }}>/ month</span>
+                <span style={{ color: '#6A6A7A', fontWeight: 400, fontSize: 13 }}>/ {form.period_type}</span>
               </p>
               {form.security_deposit && (
                 <p style={{ fontSize: 14, color: '#8A8A9A', display: 'flex', alignItems: 'center', gap: 6 }}>

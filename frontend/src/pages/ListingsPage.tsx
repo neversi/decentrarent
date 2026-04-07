@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useAuthStore } from '../features/auth/store'
 import { listProperties } from '../features/properties/api'
 import { formatPrice, TOKEN_INFO } from '../features/properties/utils'
+import { toDisplayAmount } from '../lib/tokenAmount'
 import type { Property } from '../features/properties/types'
 
 const STATUS_OPTIONS = [
@@ -51,9 +52,8 @@ export default function ListingsPage() {
     // Status filter
     if (statusFilter.length > 0 && !statusFilter.includes(p.status)) return false
 
-    // Price filter — use correct decimals per token
-    const info = TOKEN_INFO[p.token_mint] || TOKEN_INFO['SOL']
-    const priceHuman = p.price / Math.pow(10, info.decimals)
+    // Price filter
+    const priceHuman = Number(toDisplayAmount(p.price, p.token_mint))
     if (priceHuman < priceRange[0] || priceHuman > priceRange[1]) return false
 
     // Search filter
@@ -391,7 +391,7 @@ export default function ListingsPage() {
                           </div>
                           <p style={{ fontWeight: 700, fontSize: 16, display: 'flex', alignItems: 'center', gap: 6, color: '#FF9500', letterSpacing: '-0.3px' }}>
                             <img src={TOKEN_INFO[p.token_mint]?.icon || TOKEN_INFO['SOL'].icon} alt="" style={{ width: 14, height: 14, borderRadius: '50%' }} />
-                            {formatPrice(p.price, p.token_mint)}
+                            {formatPrice(p.deposit_price, p.token_mint)}
                           </p>
                         </div>
                       </div>

@@ -1,8 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { useWallet } from '@solana/wallet-adapter-react'
+import { useConnection } from '@solana/wallet-adapter-react'
+import { LAMPORTS_PER_SOL } from '@solana/web3.js'
 import { useAuthStore } from '../features/auth/store'
 import { listProperties } from '../features/properties/api'
 import { apiFetch } from '../lib/api'
+import { toDisplayAmount } from '../lib/tokenAmount'
 import type { Property } from '../features/properties/types'
 import type { Conversation } from '../features/chat/types'
 
@@ -28,8 +32,6 @@ interface OrdersResponse {
   price_updated_at: string
 }
 
-const LAMPORTS = 1_000_000_000
-
 // Escrow status colors
 const ESCROW_STATUS_COLORS: Record<string, { rentColor: string; depositColor: string; bg: string; border: string; label: string }> = {
   new: { rentColor: '#8A8A9A', depositColor: '#8A8A9A', bg: 'rgba(138,138,154,0.08)', border: 'rgba(138,138,154,0.2)', label: 'New' },
@@ -49,10 +51,13 @@ const DEFAULT_ESCROW_COLORS = { rentColor: '#8A8A9A', depositColor: '#8A8A9A', b
 export default function HomePage() {
   const { user, token, isAuthenticated } = useAuthStore()
   const navigate = useNavigate()
+  const { publicKey } = useWallet()
+  const { connection } = useConnection()
   const [listings, setListings] = useState<Property[]>([])
   const [orders, setOrders] = useState<OrderWithUSDT[]>([])
   const [solPrice, setSolPrice] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [walletBalance, setWalletBalance] = useState<number | null>(null)
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -75,6 +80,13 @@ export default function HomePage() {
       })
       .finally(() => setLoading(false))
   }, [isAuthenticated, navigate, user, token])
+
+  useEffect(() => {
+    if (!publicKey) return
+    connection.getBalance(publicKey).then((bal) => {
+      setWalletBalance(bal / LAMPORTS_PER_SOL)
+    }).catch(() => setWalletBalance(null))
+  }, [publicKey, connection])
 
   const handleTransactionClick = async (order: OrderWithUSDT) => {
     try {
@@ -114,10 +126,9 @@ export default function HomePage() {
   const assetsRented = listings.filter(l => l.status === 'rented').length
 
   // Total Value Locked = only deposits in escrow (rent goes directly to landlord, not locked)
-  const totalDepositLamports = orders
-    .filter(o => ['active', 'awaiting_deposit', 'awaiting_signatures'].includes(o.escrow_status))
-    .reduce((sum, o) => sum + o.deposit_amount, 0)
-  const totalDepositUSDT = (totalDepositLamports / LAMPORTS) * solPrice
+  const lockedOrders = orders.filter(o => ['active', 'awaiting_deposit', 'awaiting_signatures'].includes(o.escrow_status))
+  const totalDepositDisplay = lockedOrders.reduce((sum, o) => sum + Number(toDisplayAmount(o.deposit_amount, o.token_mint)), 0)
+  const totalDepositUSDT = totalDepositDisplay * solPrice
 
   // Monthly income = sum of rent_amount_usdt for active orders
   const monthlyIncomeUSDT = orders
@@ -166,24 +177,43 @@ export default function HomePage() {
           )}
         </div>
 
-        {/* Owl avatar */}
-        <Link to="/profile" style={{ textDecoration: 'none', flexShrink: 0 }}>
-          <div style={{
-            width: 52, height: 52, borderRadius: '50%', overflow: 'hidden',
-            border: '2px solid rgba(224,120,64,0.3)',
-            boxShadow: '0 4px 16px rgba(224,120,64,0.2), inset 0 1px 1px rgba(255,255,255,0.1)',
-            cursor: 'pointer', transition: 'transform 0.2s',
-          }}
-            onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.05)')}
-            onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
-          >
-            <img
-              src={`/${owlFile}`}
-              alt="Avatar"
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-            />
-          </div>
-        </Link>
+        {/* Avatar + Balance */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          <Link to="/profile" style={{ textDecoration: 'none' }}>
+            <div style={{
+              width: 52, height: 52, borderRadius: '50%', overflow: 'hidden',
+              border: '2px solid rgba(224,120,64,0.3)',
+              boxShadow: '0 4px 16px rgba(224,120,64,0.2), inset 0 1px 1px rgba(255,255,255,0.1)',
+              cursor: 'pointer', transition: 'transform 0.2s',
+            }}
+              onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.05)')}
+              onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+            >
+              <img
+                src={`/${owlFile}`}
+                alt="Avatar"
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              />
+            </div>
+          </Link>
+          {walletBalance !== null && (
+            <div style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center',
+              padding: '4px 10px', borderRadius: 10,
+              background: 'linear-gradient(135deg, rgba(52,199,89,0.1), rgba(52,199,89,0.04))',
+              border: '1px solid rgba(52,199,89,0.2)',
+            }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#34C759', letterSpacing: '-0.01em' }}>
+                {walletBalance.toFixed(4)} SOL
+              </span>
+              {solPrice > 0 && (
+                <span style={{ fontSize: 11, fontWeight: 500, color: '#8A8A9A' }}>
+                  ${(walletBalance * solPrice).toFixed(2)}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Primary Balance Card */}
@@ -233,7 +263,7 @@ export default function HomePage() {
             </h2>
           </div>
           <p style={{ color: '#6A6A7A', fontSize: 12, marginBottom: 24 }}>
-            {(totalDepositLamports / LAMPORTS).toFixed(4)} SOL in escrow deposits
+            {totalDepositDisplay.toFixed(4)} SOL in escrow deposits
           </p>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
@@ -389,7 +419,7 @@ export default function HomePage() {
                         </span>
                       </div>
                       <span style={{ color: '#5A5A6A', fontSize: 10 }}>
-                        {(order.rent_amount / LAMPORTS).toFixed(4)} {order.token_mint}
+                        {toDisplayAmount(order.rent_amount, order.token_mint)} {order.token_mint}
                       </span>
                     </div>
                     <div>
@@ -400,7 +430,7 @@ export default function HomePage() {
                         </span>
                       </div>
                       <span style={{ color: '#5A5A6A', fontSize: 10 }}>
-                        {(order.deposit_amount / LAMPORTS).toFixed(4)} {order.token_mint}
+                        {toDisplayAmount(order.deposit_amount, order.token_mint)} {order.token_mint}
                       </span>
                     </div>
                   </div>

@@ -9,6 +9,7 @@ type Property struct {
 	Description        string    `json:"description"`
 	Location           string    `json:"location"`
 	Price              int64     `json:"price"`
+	DepositPrice       int64     `json:"deposit_price"`
 	TokenMint          string    `json:"token_mint"`
 	PeriodType         string    `json:"period_type"`
 	Status             string    `json:"status"`
@@ -18,21 +19,23 @@ type Property struct {
 }
 
 type CreatePropertyRequest struct {
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	Location    string `json:"location"`
-	Price       int64  `json:"price"`
-	TokenMint   string `json:"token_mint"`
-	PeriodType  string `json:"period_type"`
+	Title        string `json:"title"`
+	Description  string `json:"description"`
+	Location     string `json:"location"`
+	Price        int64  `json:"price"`
+	DepositPrice int64  `json:"deposit_price"`
+	TokenMint    string `json:"token_mint"`
+	PeriodType   string `json:"period_type"`
 }
 
 type UpdatePropertyRequest struct {
-	Title       *string `json:"title"`
-	Description *string `json:"description"`
-	Location    *string `json:"location"`
-	Price       *int64  `json:"price"`
-	TokenMint   *string `json:"token_mint"`
-	PeriodType  *string `json:"period_type"`
+	Title        *string `json:"title"`
+	Description  *string `json:"description"`
+	Location     *string `json:"location"`
+	Price        *int64  `json:"price"`
+	DepositPrice *int64  `json:"deposit_price"`
+	TokenMint    *string `json:"token_mint"`
+	PeriodType   *string `json:"period_type"`
 }
 
 type StatusRequest struct {
