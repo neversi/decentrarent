@@ -150,18 +150,12 @@ func (oc *OrderConsumers) handlePartySigned(_ string, value []byte) error {
 		return nil
 	}
 
-	signEvt := kafkapkg.OrderSignedEvent{
-		EventID:        uuid.New().String(),
-		OrderID:        o.ID,
-		PropertyID:     o.PropertyID,
-		TenantWallet:   o.TenantID,
-		LandlordWallet: o.LandlordID,
-		SignedBy:       evt.Signer,
-		Role:           evt.Role,
-		BothSigned:     o.TenantSignedOnchain && o.LandlordSignedOnchain,
-		Timestamp:      time.Now(),
-	}
-	oc.service.producer.Publish(context.Background(), kafkapkg.TopicOrderSigned, o.ID, signEvt)
+	oc.chatSvc.SendSystemMessageWithTx(o.ConversationID,
+		fmt.Sprintf("%s signed contract", evt.Role),
+		kafkapkg.TopicOrderSigned,
+		evt.TxSignature,
+	)
+
 	oc.service.publishCentrifugoOrderUpdate(o, "party_signed", evt.TxSignature)
 
 	if o.TenantSignedOnchain && o.LandlordSignedOnchain {

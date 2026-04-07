@@ -128,17 +128,13 @@ export default function HomePage() {
   const totalListings = listings.length
   const assetsRented = listings.filter(l => l.status === 'rented').length
 
-  // Determine if user is a landlord (owns at least one property)
-  const isLandlord = totalListings > 0
-
-  // Total Value Locked = only deposits in escrow where user is landlord
-  const landlordOrders = orders.filter(o => o.landlord_id === user?.id)
-  const lockedOrders = landlordOrders.filter(o => ['active', 'awaiting_deposit', 'awaiting_signatures'].includes(o.escrow_status))
+  // Total Value Locked = deposits in escrow where user is the tenant (loaner)
+  const lockedOrders = orders.filter(o => o.tenant_id === user?.id && ['active', 'awaiting_deposit', 'awaiting_signatures'].includes(o.escrow_status))
   const totalDepositDisplay = lockedOrders.reduce((sum, o) => sum + Number(toDisplayAmount(o.deposit_amount, o.token_mint)), 0)
   const totalDepositUSDT = totalDepositDisplay * solPrice
 
   // Period income = sum of actual rent payments received (landlord orders only)
-  const periodIncomeDisplay = landlordOrders.reduce((sum, o) => sum + Number(toDisplayAmount(o.rent_paid_total || 0, o.token_mint)), 0)
+  const periodIncomeDisplay = orders.filter(o => o.landlord_id === user?.id).reduce((sum, o) => sum + Number(toDisplayAmount(o.rent_paid_total || 0, o.token_mint)), 0)
   const periodIncomeUSDT = periodIncomeDisplay * solPrice
 
   return (
@@ -222,8 +218,7 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Primary Balance Card — landlord only */}
-      {isLandlord && (
+      {/* Primary Balance Card */}
       <div style={{
         position: 'relative',
         marginBottom: 24,
@@ -336,7 +331,6 @@ export default function HomePage() {
           </div>
         </div>
       </div>
-      )}
 
       {/* Recent Transactions Section */}
       <div>
