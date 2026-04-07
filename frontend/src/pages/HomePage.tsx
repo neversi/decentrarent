@@ -6,13 +6,15 @@ import { apiFetch } from '../lib/api'
 import type { Property } from '../features/properties/types'
 import type { Conversation } from '../features/chat/types'
 
-interface Order {
+interface OrderWithUSDT {
   id: string
   conversation_id: string
   property_id: string
   escrow_status: string
   rent_amount: number
   deposit_amount: number
+  rent_amount_usdt: number
+  deposit_amount_usdt: number
   token_mint: string
   rent_start_date: string
   rent_end_date: string
@@ -20,7 +22,15 @@ interface Order {
   property?: Property
 }
 
-// Escrow status colors - iOS 16 liquid glass
+interface OrdersResponse {
+  orders: OrderWithUSDT[]
+  sol_price_usdt: number
+  price_updated_at: string
+}
+
+const LAMPORTS = 1_000_000_000
+
+// Escrow status colors
 const ESCROW_STATUS_COLORS: Record<string, { rentColor: string; depositColor: string; bg: string; border: string; label: string }> = {
   new: { rentColor: '#8A8A9A', depositColor: '#8A8A9A', bg: 'rgba(138,138,154,0.08)', border: 'rgba(138,138,154,0.2)', label: 'New' },
   awaiting_deposit: { rentColor: '#8A8A9A', depositColor: '#8A8A9A', bg: 'rgba(138,138,154,0.08)', border: 'rgba(138,138,154,0.2)', label: 'Awaiting Deposit' },
@@ -40,7 +50,8 @@ export default function HomePage() {
   const { user, token, isAuthenticated } = useAuthStore()
   const navigate = useNavigate()
   const [listings, setListings] = useState<Property[]>([])
-  const [orders, setOrders] = useState<Order[]>([])
+  const [orders, setOrders] = useState<OrderWithUSDT[]>([])
+  const [solPrice, setSolPrice] = useState(0)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -55,31 +66,28 @@ export default function HomePage() {
       listProperties({ owner: user.id }, token).catch(() => []),
       fetch('/api/orders', { headers: { 'Authorization': `Bearer ${token}` } })
         .then(r => r.json())
-        .catch(() => []),
+        .catch(() => ({ orders: [], sol_price_usdt: 0 })),
     ])
-      .then(([props, ordersData]) => {
+      .then(([props, ordersData]: [Property[], OrdersResponse]) => {
         setListings(props)
-        setOrders(Array.isArray(ordersData) ? ordersData : [])
+        setOrders(Array.isArray(ordersData.orders) ? ordersData.orders : [])
+        if (ordersData.sol_price_usdt > 0) setSolPrice(ordersData.sol_price_usdt)
       })
       .finally(() => setLoading(false))
   }, [isAuthenticated, navigate, user, token])
 
-  const handleTransactionClick = async (order: Order) => {
+  const handleTransactionClick = async (order: OrderWithUSDT) => {
     try {
-      // Fetch the conversation details
       const conversation = await apiFetch<Conversation>(`/conversations/${order.conversation_id}`, {}, token)
-      // Navigate to chat with conversation data
       navigate('/chat', { state: { conversation } })
     } catch (err) {
       console.error('Failed to load conversation:', err)
-      // Fallback: just navigate to chat, it will load the conversation
       navigate('/chat')
     }
   }
 
   const [walletCopied, setWalletCopied] = useState(false)
 
-  // Deterministic owl avatar based on user ID
   const owlIndex = user ? (user.id.charCodeAt(0) + user.id.charCodeAt(1)) % 20 + 1 : 1
   const owlFile = owlIndex === 10
     ? `Owl - All versions-${String(owlIndex).padStart(2, '0')}.jpg`
@@ -99,18 +107,22 @@ export default function HomePage() {
     setTimeout(() => setWalletCopied(false), 2000)
   }
 
-  // Time-based greeting
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
 
   const totalListings = listings.length
   const assetsRented = listings.filter(l => l.status === 'rented').length
-  const totalMonthlyIncome = orders
+
+  // Total Value Locked = only deposits in escrow (rent goes directly to landlord, not locked)
+  const totalDepositLamports = orders
+    .filter(o => ['active', 'awaiting_deposit', 'awaiting_signatures'].includes(o.escrow_status))
+    .reduce((sum, o) => sum + o.deposit_amount, 0)
+  const totalDepositUSDT = (totalDepositLamports / LAMPORTS) * solPrice
+
+  // Monthly income = sum of rent_amount_usdt for active orders
+  const monthlyIncomeUSDT = orders
     .filter(o => o.escrow_status === 'active')
-    .reduce((sum, o) => sum + o.rent_amount, 0)
-  const totalEscrow = orders
-    .filter(o => ['active', 'settled', 'awaiting_deposit', 'awaiting_signatures'].includes(o.escrow_status))
-    .reduce((sum, o) => sum + (o.deposit_amount + o.rent_amount), 0)
+    .reduce((sum, o) => sum + o.rent_amount_usdt, 0)
 
   return (
     <div style={{ padding: '0 20px 100px', background: 'transparent' }}>
@@ -127,7 +139,6 @@ export default function HomePage() {
           }}>
             @{displayName}
           </h1>
-          {/* Copyable wallet address */}
           {user.wallet_address && (
             <button
               onClick={handleCopyWallet}
@@ -175,7 +186,7 @@ export default function HomePage() {
         </Link>
       </div>
 
-      {/* Primary Balance Card - iOS 16 Liquid Glass */}
+      {/* Primary Balance Card */}
       <div style={{
         position: 'relative',
         marginBottom: 24,
@@ -201,14 +212,29 @@ export default function HomePage() {
         }} />
 
         <div style={{ position: 'relative', zIndex: 1 }}>
+          {/* SOL price badge */}
+          {solPrice > 0 && (
+            <div style={{
+              position: 'absolute', top: -8, right: 0,
+              background: 'rgba(255,255,255,0.06)',
+              border: '1px solid rgba(255,255,255,0.12)',
+              borderRadius: 10, padding: '4px 10px',
+              fontSize: 11, color: '#8A8A9A', fontWeight: 600,
+            }}>
+              1 SOL = <span style={{ color: '#34C759' }}>${solPrice.toFixed(2)}</span>
+            </div>
+          )}
+
           <p style={{ color: '#8A8A9A', fontSize: 12, fontWeight: 600, marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.7px' }}>Total Value Locked</p>
-          
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 24 }}>
+
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
             <h2 style={{ fontFamily: "'Syne',sans-serif", fontSize: 42, fontWeight: 800, letterSpacing: '-0.02em', color: '#F0F0F5' }}>
-              {(totalEscrow / 1000000).toFixed(2)}
+              ${totalDepositUSDT.toFixed(2)}
             </h2>
-            <span style={{ fontSize: 18, color: '#8A8A9A', fontWeight: 600 }}>SOL</span>
           </div>
+          <p style={{ color: '#6A6A7A', fontSize: 12, marginBottom: 24 }}>
+            {(totalDepositLamports / LAMPORTS).toFixed(4)} SOL in escrow deposits
+          </p>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
             {/* Monthly Income */}
@@ -220,9 +246,9 @@ export default function HomePage() {
               backdropFilter: 'blur(10px)',
               WebkitBackdropFilter: 'blur(10px)',
             }}>
-              <p style={{ color: '#8A8A9A', fontSize: 11, marginBottom: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.3px' }}>Monthly Income</p>
+              <p style={{ color: '#8A8A9A', fontSize: 11, marginBottom: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.3px' }}>Period Income</p>
               <p style={{ fontFamily: "'Syne',sans-serif", fontSize: 22, fontWeight: 700, color: '#34C759' }}>
-                {(totalMonthlyIncome / 1000000).toFixed(3)} <span style={{ fontSize: 12, fontWeight: 500 }}>SOL</span>
+                ${monthlyIncomeUSDT.toFixed(2)}
               </p>
             </div>
 
@@ -278,7 +304,7 @@ export default function HomePage() {
       <div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <p style={{ fontFamily: "'Syne',sans-serif", fontWeight: 700, fontSize: 15, color: '#F0F0F5', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Recent Transactions</p>
-          <Link to="/listings" style={{ textDecoration: 'none' }}>
+          <Link to="/chat" style={{ textDecoration: 'none' }}>
             <span style={{ color: '#34C759', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>View All</span>
           </Link>
         </div>
@@ -303,7 +329,7 @@ export default function HomePage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {orders.slice(0, 5).map((order) => {
               const colors = ESCROW_STATUS_COLORS[order.escrow_status] || DEFAULT_ESCROW_COLORS
-              
+
               return (
                 <div
                   key={order.id}
@@ -353,18 +379,28 @@ export default function HomePage() {
                     </div>
                   </div>
 
-                  {/* Amounts */}
+                  {/* Amounts in USDT + SOL subtitle */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4, textAlign: 'right', flexShrink: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
-                      <span style={{ color: '#8A8A9A', fontSize: 11, fontWeight: 500 }}>Rent:</span>
-                      <span style={{ color: colors.rentColor, fontWeight: 700, fontSize: 13 }}>
-                        {(order.rent_amount / 1000000).toFixed(3)} SOL
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
+                        <span style={{ color: '#8A8A9A', fontSize: 11, fontWeight: 500 }}>Rent:</span>
+                        <span style={{ color: colors.rentColor, fontWeight: 700, fontSize: 13 }}>
+                          ${order.rent_amount_usdt.toFixed(2)}
+                        </span>
+                      </div>
+                      <span style={{ color: '#5A5A6A', fontSize: 10 }}>
+                        {(order.rent_amount / LAMPORTS).toFixed(4)} {order.token_mint}
                       </span>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
-                      <span style={{ color: '#8A8A9A', fontSize: 11, fontWeight: 500 }}>Deposit:</span>
-                      <span style={{ color: colors.depositColor, fontWeight: 700, fontSize: 13 }}>
-                        {(order.deposit_amount / 1000000).toFixed(3)} SOL
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
+                        <span style={{ color: '#8A8A9A', fontSize: 11, fontWeight: 500 }}>Deposit:</span>
+                        <span style={{ color: colors.depositColor, fontWeight: 700, fontSize: 13 }}>
+                          ${order.deposit_amount_usdt.toFixed(2)}
+                        </span>
+                      </div>
+                      <span style={{ color: '#5A5A6A', fontSize: 10 }}>
+                        {(order.deposit_amount / LAMPORTS).toFixed(4)} {order.token_mint}
                       </span>
                     </div>
                   </div>

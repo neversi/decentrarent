@@ -2,21 +2,51 @@ package order
 
 import (
 	"encoding/json"
+	"math"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
 	mw "github.com/abdro/decentrarent/backend/internal/middleware"
 )
 
+// PriceProvider returns the current SOL price in USDT.
+type PriceProvider interface {
+	GetPrice() (float64, time.Time)
+}
+
 type Handler struct {
 	store   *Store
 	service *Service
+	price   PriceProvider
 }
 
-func NewHandler(store *Store, service *Service) *Handler {
-	return &Handler{store: store, service: service}
+func NewHandler(store *Store, service *Service, price PriceProvider) *Handler {
+	return &Handler{store: store, service: service, price: price}
+}
+
+// OrderWithUSDT extends Order with USDT-converted amounts.
+type OrderWithUSDT struct {
+	Order
+	RentAmountUSDT    float64 `json:"rent_amount_usdt"`
+	DepositAmountUSDT float64 `json:"deposit_amount_usdt"`
+}
+
+// OrdersListResponse wraps the order list with SOL price metadata.
+type OrdersListResponse struct {
+	Orders      []OrderWithUSDT `json:"orders"`
+	SolPriceUSD float64         `json:"sol_price_usdt"`
+	PriceAt     string          `json:"price_updated_at"`
+}
+
+func lamportsToSOL(lamports int64) float64 {
+	return float64(lamports) / 1_000_000_000
+}
+
+func roundUSDT(v float64) float64 {
+	return math.Round(v*100) / 100
 }
 
 // ─── Create godoc ───────────────────────────────────────────────────
@@ -105,8 +135,25 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		orders = []Order{}
 	}
 
+	solPrice, priceAt := h.price.GetPrice()
+
+	enriched := make([]OrderWithUSDT, len(orders))
+	for i, o := range orders {
+		rentSOL := lamportsToSOL(o.RentAmount)
+		depSOL := lamportsToSOL(o.DepositAmount)
+		enriched[i] = OrderWithUSDT{
+			Order:             o,
+			RentAmountUSDT:    roundUSDT(rentSOL * solPrice),
+			DepositAmountUSDT: roundUSDT(depSOL * solPrice),
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(orders)
+	json.NewEncoder(w).Encode(OrdersListResponse{
+		Orders:      enriched,
+		SolPriceUSD: solPrice,
+		PriceAt:     priceAt.UTC().Format("2006-01-02T15:04:05Z"),
+	})
 }
 
 // ─── Get godoc ──────────────────────────────────────────────────────
