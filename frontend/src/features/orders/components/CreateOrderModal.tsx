@@ -189,15 +189,15 @@ export function CreateOrderModal({ conversation, property, onClose, onCreated }:
               <label style={{ color: '#94a3b8', fontSize: 12, marginBottom: 4, display: 'block', fontWeight: 500 }}>
                 Monthly Rent ({tokenMint})
               </label>
-              <input type="number" value={rentAmount} onChange={(e) => setRentAmount(e.target.value)}
-                placeholder="0" style={inputStyle} />
+              <input type="number" step="any" min="0" value={rentAmount} onChange={(e) => setRentAmount(e.target.value)}
+                placeholder="0.00" style={inputStyle} />
             </div>
             <div>
               <label style={{ color: '#94a3b8', fontSize: 12, marginBottom: 4, display: 'block', fontWeight: 500 }}>
                 Deposit ({tokenMint})
               </label>
-              <input type="number" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)}
-                placeholder="0" style={inputStyle} />
+              <input type="number" step="any" min="0" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)}
+                placeholder="0.00" style={inputStyle} />
             </div>
           </div>
 
@@ -257,7 +257,7 @@ export function CreateOrderModal({ conversation, property, onClose, onCreated }:
 
           {/* Sign Deadline */}
           <div>
-            <label style={{ color: '#94a3b8', fontSize: 12, marginBottom: 4, display: 'block', fontWeight: 500 }}>Sign Deadline</label>
+            <label style={{ color: '#94a3b8', fontSize: 12, marginBottom: 4, display: 'block', fontWeight: 500 }}>Sign Deadline ({deadlineUnit})</label>
             <div style={{ display: 'flex', gap: 6 }}>
               <input type="number" value={deadlineValue} onChange={(e) => setDeadlineValue(e.target.value)}
                 style={{ ...inputStyle, flex: 1 }} />

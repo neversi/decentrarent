@@ -14,11 +14,14 @@ interface OrderWithUSDT {
   id: string
   conversation_id: string
   property_id: string
+  tenant_id: string
+  landlord_id: string
   escrow_status: string
   rent_amount: number
   deposit_amount: number
   rent_amount_usdt: number
   deposit_amount_usdt: number
+  rent_paid_total: number
   token_mint: string
   rent_start_date: string
   rent_end_date: string
@@ -125,15 +128,18 @@ export default function HomePage() {
   const totalListings = listings.length
   const assetsRented = listings.filter(l => l.status === 'rented').length
 
-  // Total Value Locked = only deposits in escrow (rent goes directly to landlord, not locked)
-  const lockedOrders = orders.filter(o => ['active', 'awaiting_deposit', 'awaiting_signatures'].includes(o.escrow_status))
+  // Determine if user is a landlord (owns at least one property)
+  const isLandlord = totalListings > 0
+
+  // Total Value Locked = only deposits in escrow where user is landlord
+  const landlordOrders = orders.filter(o => o.landlord_id === user?.id)
+  const lockedOrders = landlordOrders.filter(o => ['active', 'awaiting_deposit', 'awaiting_signatures'].includes(o.escrow_status))
   const totalDepositDisplay = lockedOrders.reduce((sum, o) => sum + Number(toDisplayAmount(o.deposit_amount, o.token_mint)), 0)
   const totalDepositUSDT = totalDepositDisplay * solPrice
 
-  // Monthly income = sum of rent_amount_usdt for active orders
-  const monthlyIncomeUSDT = orders
-    .filter(o => o.escrow_status === 'active')
-    .reduce((sum, o) => sum + o.rent_amount_usdt, 0)
+  // Period income = sum of actual rent payments received (landlord orders only)
+  const periodIncomeDisplay = landlordOrders.reduce((sum, o) => sum + Number(toDisplayAmount(o.rent_paid_total || 0, o.token_mint)), 0)
+  const periodIncomeUSDT = periodIncomeDisplay * solPrice
 
   return (
     <div style={{ padding: '0 20px 100px', background: 'transparent' }}>
@@ -216,7 +222,8 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Primary Balance Card */}
+      {/* Primary Balance Card — landlord only */}
+      {isLandlord && (
       <div style={{
         position: 'relative',
         marginBottom: 24,
@@ -267,7 +274,7 @@ export default function HomePage() {
           </p>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
-            {/* Monthly Income */}
+            {/* Period Income — based on actual rent payments received */}
             <div style={{
               background: 'rgba(52,199,89,0.1)',
               borderRadius: 14,
@@ -278,7 +285,7 @@ export default function HomePage() {
             }}>
               <p style={{ color: '#8A8A9A', fontSize: 11, marginBottom: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.3px' }}>Period Income</p>
               <p style={{ fontFamily: "'Syne',sans-serif", fontSize: 22, fontWeight: 700, color: '#34C759' }}>
-                ${monthlyIncomeUSDT.toFixed(2)}
+                ${periodIncomeUSDT.toFixed(2)}
               </p>
             </div>
 
@@ -329,6 +336,7 @@ export default function HomePage() {
           </div>
         </div>
       </div>
+      )}
 
       {/* Recent Transactions Section */}
       <div>

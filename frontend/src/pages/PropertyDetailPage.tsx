@@ -556,9 +556,17 @@ function AvailabilityCalendar({ orders, month, onChangeMonth }: CalendarProps) {
               background: c.booked
                 ? 'rgba(224, 120, 64, 0.25)'
                 : isToday
-                  ? 'rgba(61, 214, 140, 0.12)'
-                  : 'transparent',
-              border: isToday ? '1px solid rgba(61,214,140,0.3)' : '1px solid transparent',
+                  ? 'rgba(61, 214, 140, 0.18)'
+                  : !c.past
+                    ? 'rgba(61, 214, 140, 0.04)'
+                    : 'transparent',
+              border: isToday
+                ? '1px solid rgba(61,214,140,0.3)'
+                : c.booked
+                  ? '1px solid rgba(224,120,64,0.4)'
+                  : !c.past
+                    ? '1px solid rgba(61,214,140,0.1)'
+                    : '1px solid transparent',
             }}>
               {c.day}
             </div>

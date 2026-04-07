@@ -33,6 +33,7 @@ type OrderWithUSDT struct {
 	Order
 	RentAmountUSDT    float64 `json:"rent_amount_usdt"`
 	DepositAmountUSDT float64 `json:"deposit_amount_usdt"`
+	RentPaidTotal     int64   `json:"rent_paid_total"`
 }
 
 // OrdersListResponse wraps the order list with SOL price metadata.
@@ -143,10 +144,21 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	for i, o := range orders {
 		rentSOL := lamportsToSOL(o.RentAmount)
 		depSOL := lamportsToSOL(o.DepositAmount)
+
+		// Sum total rent payments for this order
+		var paidTotal int64
+		payments, err := h.store.GetRentPayments(o.ID)
+		if err == nil {
+			for _, p := range payments {
+				paidTotal += p.PaidAmount
+			}
+		}
+
 		enriched[i] = OrderWithUSDT{
 			Order:             o,
 			RentAmountUSDT:    roundUSDT(rentSOL * solPrice),
 			DepositAmountUSDT: roundUSDT(depSOL * solPrice),
+			RentPaidTotal:     paidTotal,
 		}
 	}
 
