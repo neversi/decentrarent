@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"time"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -26,6 +27,7 @@ import (
 	kafkapkg "github.com/abdro/decentrarent/backend/internal/kafka"
 	"github.com/abdro/decentrarent/backend/internal/media"
 	"github.com/abdro/decentrarent/backend/internal/order"
+	"github.com/abdro/decentrarent/backend/internal/price"
 	"github.com/abdro/decentrarent/backend/internal/property"
 	solanapkg "github.com/abdro/decentrarent/backend/internal/solana"
 	"github.com/abdro/decentrarent/backend/internal/user"
@@ -133,6 +135,11 @@ func main() {
 		log.Println("Solana event listener started")
 	}
 
+	// ─── SOL price service ──────────────────────────────────────────
+	priceService := price.NewService()
+	go priceService.Start(5 * time.Minute)
+	log.Println("SOL price service started")
+
 	// ─── Workers ───────────────────────────────────────────────────
 	escrowWorker := worker.NewEscrowWorker(jobStore, orderStore, escrowService)
 	go escrowWorker.Start(ctx)
@@ -149,7 +156,7 @@ func main() {
 	centrifugoHandler := chat.NewCentrifugoHandler(authService, chatService)
 	mediaHandler := media.NewHandler(mediaStore, s3Client, propertyStore)
 	propertyHandler := property.NewHandler(propertyStore, propertyService, mediaHandler, mediaHandler)
-	orderHandler := order.NewHandler(orderStore, orderService)
+	orderHandler := order.NewHandler(orderStore, orderService, priceService)
 
 	// ─── Router ─────────────────────────────────────────────────────
 	r := chi.NewRouter()
@@ -183,6 +190,10 @@ func main() {
 	r.Post("/centrifugo/connect", centrifugoHandler.Connect)
 	r.Post("/centrifugo/subscribe", centrifugoHandler.Subscribe)
 	r.Post("/centrifugo/publish", centrifugoHandler.Publish)
+
+	// SOL price (public)
+	priceHandler := price.NewHandler(priceService)
+	r.Get("/sol-price", priceHandler.GetSOLPrice)
 
 	// Public property routes
 	r.Get("/properties", propertyHandler.List)
