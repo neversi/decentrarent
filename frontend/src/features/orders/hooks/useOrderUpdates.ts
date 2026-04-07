@@ -44,8 +44,14 @@ export function useOrderUpdates(
       setOrders((prev) => {
         const idx = prev.findIndex((o) => o.id === evt.order_id);
         if (idx >= 0) {
+          const existing = prev[idx];
+          const merged = {
+            ...evt.order,
+            landlord_pk: evt.order.landlord_pk || existing.landlord_pk,
+            tenant_pk: evt.order.tenant_pk || existing.tenant_pk,
+          };
           const updated = [...prev];
-          updated[idx] = evt.order;
+          updated[idx] = merged;
           return updated;
         }
         return [evt.order, ...prev];
@@ -78,6 +84,12 @@ export function useOrderUpdates(
           break;
         case 'order_expired':
           addToast({ variant: 'error', title: 'Order Expired', message: 'Sign deadline passed' });
+          break;
+        case 'dispute_opened':
+          addToast({ variant: 'error', title: 'Dispute Opened', message: evt.order.dispute_reason || 'Deposit frozen pending resolution' });
+          break;
+        case 'rent_paid':
+          addToast({ variant: 'onchain', title: 'Rent Paid', message: 'Payment confirmed on-chain' });
           break;
       }
     });

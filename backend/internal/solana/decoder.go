@@ -60,6 +60,10 @@ func decodeBody(disc [8]byte, data []byte, txSig string) (interface{}, string) {
 		return decodeEscrowExpired(data, txSig)
 	case DiscriminatorRentPaid:
 		return decodeRentPaid(data, txSig)
+	case DiscriminatorDisputeOpened:
+		return decodeDisputeOpened(data, txSig)
+	case DiscriminatorDepositReleased:
+		return decodeDepositReleased(data, txSig)
 	default:
 		return nil, ""
 	}
@@ -176,6 +180,44 @@ func decodeRentPaid(data []byte, txSig string) (*SolanaRentPaidEvent, string) {
 		Amount:      amount,
 		TotalPaid:   totalPaid,
 		PaidAt:      paidAt,
+		TxSignature: txSig,
+	}, escrow
+}
+
+// DisputeOpened: escrow(Pubkey) + reason(String)
+func decodeDisputeOpened(data []byte, txSig string) (*SolanaDisputeOpenedEvent, string) {
+	off := 0
+	escrow, off := readPubkey(data, off)
+	reason, _ := readString(data, off)
+
+	if escrow == "" {
+		return nil, ""
+	}
+
+	return &SolanaDisputeOpenedEvent{
+		Escrow:      escrow,
+		Reason:      reason,
+		TxSignature: txSig,
+	}, escrow
+}
+
+// DepositReleased: escrow(Pubkey) + recipient(Pubkey) + amount(u64) + reason(String)
+func decodeDepositReleased(data []byte, txSig string) (*SolanaDepositReleasedEvent, string) {
+	off := 0
+	escrow, off := readPubkey(data, off)
+	recipient, off := readPubkey(data, off)
+	amount, off := readU64(data, off)
+	reason, _ := readString(data, off)
+
+	if escrow == "" {
+		return nil, ""
+	}
+
+	return &SolanaDepositReleasedEvent{
+		Escrow:      escrow,
+		Recipient:   recipient,
+		Amount:      amount,
+		Reason:      reason,
 		TxSignature: txSig,
 	}, escrow
 }

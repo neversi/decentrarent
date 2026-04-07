@@ -175,21 +175,65 @@ func (s *Store) ListByParticipant(userID string, limit, offset int) ([]Order, er
 	return orders, nil
 }
 
+// ─── ListDisputed ───────────────────────────────────────────────────
+
+func (s *Store) ListDisputed(limit, offset int) ([]Order, error) {
+	rows, err := s.db.Query(
+		`SELECT o.id, o.conversation_id, o.property_id, o.tenant_id, o.landlord_id, o.created_by,
+		        o.deposit_amount, o.rent_amount, o.token_mint, o.escrow_status, o.escrow_address,
+		        o.tenant_signed, o.landlord_signed, o.sign_deadline, o.rent_start_date, o.rent_end_date,
+		        o.dispute_reason, o.created_at, o.updated_at, o.landlord_signed_onchain, o.tenant_signed_onchain,
+		        u.wallet_address, u2.wallet_address
+		 FROM orders o
+		 LEFT JOIN users u  ON o.landlord_id = u.id
+		 LEFT JOIN users u2 ON o.tenant_id   = u2.id
+		 WHERE o.escrow_status = $1
+		 ORDER BY o.updated_at DESC
+		 LIMIT $2 OFFSET $3`,
+		StatusDisputed, limit, offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var orders []Order
+	for rows.Next() {
+		var o Order
+		if err := rows.Scan(
+			&o.ID, &o.ConversationID, &o.PropertyID, &o.TenantID, &o.LandlordID, &o.CreatedBy,
+			&o.DepositAmount, &o.RentAmount, &o.TokenMint, &o.EscrowStatus, &o.EscrowAddress,
+			&o.TenantSigned, &o.LandlordSigned, &o.SignDeadline, &o.RentStartDate, &o.RentEndDate,
+			&o.DisputeReason, &o.CreatedAt, &o.UpdatedAt, &o.LandlordSignedOnchain, &o.TenantSignedOnchain,
+			&o.LandlordPK, &o.TenantPK,
+		); err != nil {
+			return nil, err
+		}
+		orders = append(orders, o)
+	}
+	return orders, nil
+}
+
 // ─── FindByEscrowAddress ───────────────────────────────────────────
 
 func (s *Store) FindByEscrowAddress(escrowAddress string) (*Order, error) {
 	o := &Order{}
 	err := s.db.QueryRow(
-		`SELECT id, conversation_id, property_id, tenant_id, landlord_id, created_by,
-		        deposit_amount, rent_amount, token_mint, escrow_status, escrow_address,
-		        tenant_signed, landlord_signed, sign_deadline, rent_start_date, rent_end_date,
-		        dispute_reason, created_at, updated_at, landlord_signed_onchain, tenant_signed_onchain
-		 FROM orders WHERE escrow_address = $1`, escrowAddress,
+		`SELECT o.id, o.conversation_id, o.property_id, o.tenant_id, o.landlord_id, o.created_by,
+		        o.deposit_amount, o.rent_amount, o.token_mint, o.escrow_status, o.escrow_address,
+		        o.tenant_signed, o.landlord_signed, o.sign_deadline, o.rent_start_date, o.rent_end_date,
+		        o.dispute_reason, o.created_at, o.updated_at, o.landlord_signed_onchain, o.tenant_signed_onchain,
+		        u.wallet_address, u2.wallet_address
+		 FROM orders o
+		 LEFT JOIN users u  ON o.landlord_id = u.id
+		 LEFT JOIN users u2 ON o.tenant_id   = u2.id
+		 WHERE o.escrow_address = $1`, escrowAddress,
 	).Scan(
 		&o.ID, &o.ConversationID, &o.PropertyID, &o.TenantID, &o.LandlordID, &o.CreatedBy,
 		&o.DepositAmount, &o.RentAmount, &o.TokenMint, &o.EscrowStatus, &o.EscrowAddress,
 		&o.TenantSigned, &o.LandlordSigned, &o.SignDeadline, &o.RentStartDate, &o.RentEndDate,
 		&o.DisputeReason, &o.CreatedAt, &o.UpdatedAt, &o.LandlordSignedOnchain, &o.TenantSignedOnchain,
+		&o.LandlordPK, &o.TenantPK,
 	)
 	if err != nil {
 		return nil, err

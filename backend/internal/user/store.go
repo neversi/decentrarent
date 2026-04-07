@@ -58,17 +58,23 @@ func (s *Store) CreateByCredentials(inp CreateUserInput) (*User, error) {
 	return u, nil
 }
 
+func (s *Store) GetIsAdmin(id string) (bool, error) {
+	var isAdmin bool
+	err := s.db.QueryRow(`SELECT is_admin FROM users WHERE id = $1`, id).Scan(&isAdmin)
+	return isAdmin, err
+}
+
 // GetByUsername — для логина; возвращает хэш пароля тоже
 func (s *Store) GetByUsername(username string) (*User, string, error) {
 	u := &User{}
 	var passwordHash string
 	err := s.db.QueryRow(`
         SELECT id, COALESCE(wallet_address,''), username, first_name, last_name,
-               COALESCE(email,''), COALESCE(phone,''), display_name, created_at, COALESCE(password_hash,'')
+               COALESCE(email,''), COALESCE(phone,''), display_name, is_admin, created_at, COALESCE(password_hash,'')
         FROM users WHERE username = $1`,
 		username,
 	).Scan(&u.ID, &u.WalletAddress, &u.Username, &u.FirstName, &u.LastName,
-		&u.Email, &u.Phone, &u.DisplayName, &u.CreatedAt, &passwordHash)
+		&u.Email, &u.Phone, &u.DisplayName, &u.IsAdmin, &u.CreatedAt, &passwordHash)
 	if err != nil {
 		return nil, "", err
 	}
@@ -79,11 +85,11 @@ func (s *Store) GetByWallet(walletAddress string) (*User, error) {
 	u := &User{}
 	err := s.db.QueryRow(
 		`SELECT id, COALESCE(wallet_address,''), COALESCE(username,''), first_name, last_name,
-		        COALESCE(email,''), COALESCE(phone,''), display_name, created_at
+		        COALESCE(email,''), COALESCE(phone,''), display_name, is_admin, created_at
 		 FROM users WHERE wallet_address = $1`,
 		walletAddress,
 	).Scan(&u.ID, &u.WalletAddress, &u.Username, &u.FirstName, &u.LastName,
-		&u.Email, &u.Phone, &u.DisplayName, &u.CreatedAt)
+		&u.Email, &u.Phone, &u.DisplayName, &u.IsAdmin, &u.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -93,9 +99,9 @@ func (s *Store) GetByWallet(walletAddress string) (*User, error) {
 func (s *Store) UpsertByWallet(walletAddress string) (*User, error) {
 	u := &User{}
 	err := s.db.QueryRow(
-		"SELECT id, wallet_address, display_name, created_at FROM users WHERE wallet_address = $1",
+		"SELECT id, wallet_address, display_name, is_admin, created_at FROM users WHERE wallet_address = $1",
 		walletAddress,
-	).Scan(&u.ID, &u.WalletAddress, &u.DisplayName, &u.CreatedAt)
+	).Scan(&u.ID, &u.WalletAddress, &u.DisplayName, &u.IsAdmin, &u.CreatedAt)
 
 	if err == sql.ErrNoRows {
 		u = &User{
@@ -124,10 +130,10 @@ func (s *Store) GetByID(id string) (*User, error) {
 	u := &User{}
 	err := s.db.QueryRow(
 		`SELECT id, COALESCE(wallet_address,''), COALESCE(username,''), first_name, last_name,
-		        COALESCE(email,''), COALESCE(phone,''), display_name, created_at
+		        COALESCE(email,''), COALESCE(phone,''), display_name, is_admin, created_at
 		 FROM users WHERE id = $1`, id,
 	).Scan(&u.ID, &u.WalletAddress, &u.Username, &u.FirstName, &u.LastName,
-		&u.Email, &u.Phone, &u.DisplayName, &u.CreatedAt)
+		&u.Email, &u.Phone, &u.DisplayName, &u.IsAdmin, &u.CreatedAt)
 	if err != nil {
 		return nil, err
 	}

@@ -88,18 +88,11 @@ func (cc *ChatConsumers) handleOrderSigned(topic string, value []byte) error {
 		roleName = "Арендодатель"
 	}
 
-	cc.service.SendSystemMessage(conv.ID,
+	cc.service.SendSystemMessageWithTx(conv.ID,
 		fmt.Sprintf("%s подписал договор", roleName),
 		kafkapkg.TopicOrderSigned,
+		"",
 	)
-
-	if !evt.BothSigned {
-		cc.service.SendModalMessage(conv.ID,
-			"Подписываем договор?",
-			ModalActionSignAgreement,
-			evt.OrderID,
-		)
-	}
 
 	return nil
 }
@@ -121,7 +114,7 @@ func (cc *ChatConsumers) handleOrderActivated(topic string, value []byte) error 
 	)
 
 	cc.service.SendModalMessage(conv.ID,
-		fmt.Sprintf("Waiting for deposit confirmation: %s?", utils.RenderToken(int(evt.DepositAmount), evt.TokenMint)),
+		fmt.Sprintf("Waiting for rent: %s", utils.RenderToken(int(evt.RentAmount), evt.TokenMint)),
 		ModalActionDepositConfirm,
 		evt.OrderID,
 	)

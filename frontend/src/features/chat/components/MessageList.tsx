@@ -1,7 +1,4 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
-import { apiFetch } from '../../../lib/api';
-import { useAuthStore } from '../../auth/store';
-import { useToastStore } from '../../toast/store';
 import type { Message } from '../types';
 import './MagicDog.css';
 
@@ -188,6 +185,7 @@ function DogGroup({ msgs }: { msgs: Message[] }) {
 /* ── System Bubble (no avatar, just the card) ── */
 
 function SystemBubble({ msg }: { msg: Message }) {
+  
   return (
     <div style={{
       background: 'rgba(224, 120, 64, 0.08)',
@@ -198,6 +196,16 @@ function SystemBubble({ msg }: { msg: Message }) {
       textAlign: 'center',
     }}>
       <p style={{ fontSize: 13, color: '#E07840', fontWeight: 500 }}>{msg.content}</p>
+      {msg.metadata?.tx && (
+        <a
+          href={`https://solscan.io/tx/${msg.metadata.tx}?cluster=devnet`}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ display: 'block', fontSize: 11, color: '#9945FF', marginTop: 4, textDecoration: 'none' }}
+        >
+          View transaction ↗
+        </a>
+      )}
       <p style={{ fontSize: 10, color: '#6A6A7A', marginTop: 4 }}>
         {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
       </p>
@@ -208,33 +216,7 @@ function SystemBubble({ msg }: { msg: Message }) {
 /* ── Modal Bubble (no avatar, just the card with buttons) ── */
 
 function ModalBubble({ msg }: { msg: Message }) {
-  const { token } = useAuthStore();
-  const { addToast } = useToastStore();
-  const [responding, setResponding] = useState(false);
-  const [localStatus, setLocalStatus] = useState(msg.metadata?.modal_status || 'pending');
-
-  const isPending = localStatus === 'pending';
-
-  const handleRespond = async (action: 'accepted' | 'rejected') => {
-    setResponding(true);
-    try {
-      await apiFetch('/conversations/modals/respond', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message_id: msg.id, action }),
-      }, token);
-      setLocalStatus(action);
-      addToast({
-        variant: action === 'accepted' ? 'onchain' : 'error',
-        title: action === 'accepted' ? 'Accepted' : 'Rejected',
-        message: msg.content,
-      });
-    } catch (err) {
-      addToast({ variant: 'error', title: 'Failed', message: err instanceof Error ? err.message : '' });
-    } finally {
-      setResponding(false);
-    }
-  };
+  const [localStatus] = useState(msg.metadata?.modal_status || 'pending');
 
   const statusLabel = localStatus === 'accepted' ? 'Accepted' : localStatus === 'rejected' ? 'Rejected' : localStatus === 'expired' ? 'Expired' : null;
   const statusColor = localStatus === 'accepted' ? '#3DD68C' : localStatus === 'rejected' ? '#FF4D6A' : '#6A6A7A';
@@ -242,41 +224,16 @@ function ModalBubble({ msg }: { msg: Message }) {
   return (
     <div style={{
       background: '#141416',
-      border: `1px solid rgba(224, 120, 64, ${isPending ? '0.25' : '0.12'})`,
+      border: `1px solid rgba(224, 120, 64, 0.12)`,
       borderRadius: 12,
       padding: '12px 16px',
       maxWidth: '85%',
       minWidth: 200,
       textAlign: 'center',
     }}>
-      <p style={{ fontSize: 13, color: '#e2e8f0', fontWeight: 500, marginBottom: isPending ? 10 : 4 }}>{msg.content}</p>
+      <p style={{ fontSize: 13, color: '#e2e8f0', fontWeight: 500, marginBottom: 4 }}>{msg.content}</p>
 
-      {isPending ? (
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
-          <button
-            onClick={() => handleRespond('accepted')}
-            disabled={responding}
-            style={{
-              padding: '6px 16px', background: '#3DD68C', color: '#0a0a0f',
-              border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 12, cursor: 'pointer',
-              opacity: responding ? 0.6 : 1,
-            }}
-          >
-            Accept
-          </button>
-          <button
-            onClick={() => handleRespond('rejected')}
-            disabled={responding}
-            style={{
-              padding: '6px 16px', background: 'transparent', color: '#FF4D6A',
-              border: '1px solid #FF4D6A', borderRadius: 6, fontWeight: 600, fontSize: 12, cursor: 'pointer',
-              opacity: responding ? 0.6 : 1,
-            }}
-          >
-            Reject
-          </button>
-        </div>
-      ) : (
+      {statusLabel && (
         <p style={{ fontSize: 11, color: statusColor, fontWeight: 600 }}>{statusLabel}</p>
       )}
 

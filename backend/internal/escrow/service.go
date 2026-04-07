@@ -4,10 +4,49 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"regexp"
+	"strconv"
 
 	"github.com/gagliardetto/solana-go"
 	"github.com/gagliardetto/solana-go/rpc"
 )
+
+// Anchor custom errors start at 6000 (0x1770).
+var anchorErrors = map[int]string{
+	6000: "invalid amount",
+	6001: "deadline must be in the future",
+	6002: "deadline has not been reached yet",
+	6003: "escrow deadline has expired",
+	6004: "invalid escrow status for this operation",
+	6005: "unauthorized signer",
+	6006: "already signed",
+	6007: "arithmetic overflow",
+	6008: "reason too long (max 200 chars)",
+	6009: "invalid end date",
+	6010: "invalid timestamp",
+	6011: "invalid period",
+	6012: "rent overpaid",
+}
+
+var customErrRe = regexp.MustCompile(`custom program error: 0x([0-9a-fA-F]+)`)
+
+func parseAnchorError(err error) error {
+	if err == nil {
+		return nil
+	}
+	m := customErrRe.FindStringSubmatch(err.Error())
+	if m == nil {
+		return err
+	}
+	code, parseErr := strconv.ParseInt(m[1], 16, 64)
+	if parseErr != nil {
+		return err
+	}
+	if msg, ok := anchorErrors[int(code)]; ok {
+		return fmt.Errorf("program error: %s", msg)
+	}
+	return fmt.Errorf("program error: code 0x%x", code)
+}
 
 const ProgramID = "GNAZzNcftcRNMtjETiXupfpUqPmwQyhNCrTJeiZFkpWY"
 
@@ -202,7 +241,7 @@ func (s *Service) sendAndConfirm(
 	)
 
 	if err != nil {
-		return "", fmt.Errorf("send and confirm tx: %w", err)
+		return "", parseAnchorError(err)
 	}
 
 	return sig.String(), nil

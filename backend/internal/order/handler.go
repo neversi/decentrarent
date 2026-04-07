@@ -230,6 +230,138 @@ func (h *Handler) Reject(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(o)
 }
 
+// ─── OpenDispute godoc ─────────────────────────────────────────────
+// @Summary Open a dispute for an active order
+// @Description Calls the on-chain open_dispute instruction. Status transitions to 'disputed' after the Solana event is received.
+// @Tags orders
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param id path string true "Order ID"
+// @Param body body DisputeRequest true "Dispute reason"
+// @Success 202 {object} map[string]string
+// @Failure 400 {object} map[string]string
+// @Failure 403 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Router /orders/{id}/dispute [post]
+func (h *Handler) OpenDispute(w http.ResponseWriter, r *http.Request) {
+	userID := mw.GetUserID(r.Context())
+	id := chi.URLParam(r, "id")
+
+	var req DisputeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+
+	if req.Reason == "" {
+		http.Error(w, `{"error":"dispute reason cannot be empty"}`, http.StatusBadRequest)
+		return
+	}
+
+	_, err := h.service.OpenDispute(id, userID, req.Reason)
+	if err != nil {
+		status := http.StatusBadRequest
+		if err == ErrOrderNotFound {
+			status = http.StatusNotFound
+		} else if err == ErrForbidden {
+			status = http.StatusForbidden
+		}
+		http.Error(w, `{"error":"`+err.Error()+`"}`, status)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	w.Write([]byte(`{"status":"dispute_submitted"}`))
+}
+
+// ─── ListDisputed godoc (admin) ─────────────────────────────────────
+// @Summary List all disputed orders (admin only)
+// @Tags admin
+// @Security BearerAuth
+// @Produce json
+// @Param limit query int false "Limit (default 50)"
+// @Param offset query int false "Offset"
+// @Success 200 {array} Order
+// @Failure 403 {object} map[string]string
+// @Router /admin/orders/disputed [get]
+func (h *Handler) ListDisputed(w http.ResponseWriter, r *http.Request) {
+	if !mw.GetIsAdmin(r.Context()) {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+
+	q := r.URL.Query()
+	limit := 50
+	if l := q.Get("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= 200 {
+			limit = parsed
+		}
+	}
+	offset := 0
+	if o := q.Get("offset"); o != "" {
+		if parsed, err := strconv.Atoi(o); err == nil && parsed >= 0 {
+			offset = parsed
+		}
+	}
+
+	orders, err := h.store.ListDisputed(limit, offset)
+	if err != nil {
+		http.Error(w, `{"error":"failed to list disputed orders"}`, http.StatusInternalServerError)
+		return
+	}
+	if orders == nil {
+		orders = []Order{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(orders)
+}
+
+// ─── ResolveDispute godoc (admin) ───────────────────────────────────
+// @Summary Resolve a disputed order (admin only)
+// @Tags admin
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param id path string true "Order ID"
+// @Param body body ResolveDisputeRequest true "winner (tenant|landlord) and reason"
+// @Success 202 {object} map[string]string
+// @Failure 400 {object} map[string]string
+// @Failure 403 {object} map[string]string
+// @Router /admin/orders/{id}/resolve [post]
+func (h *Handler) ResolveDispute(w http.ResponseWriter, r *http.Request) {
+	if !mw.GetIsAdmin(r.Context()) {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+
+	id := chi.URLParam(r, "id")
+
+	var req ResolveDisputeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+
+	_, err := h.service.ResolveDispute(id, req.Winner, req.Reason)
+	if err != nil {
+		status := http.StatusBadRequest
+		if err == ErrOrderNotFound {
+			status = http.StatusNotFound
+		} else if err == ErrForbidden {
+			status = http.StatusForbidden
+		}
+		http.Error(w, `{"error":"`+err.Error()+`"}`, status)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	w.Write([]byte(`{"status":"resolve_submitted"}`))
+}
+
 // ─── GetHistory godoc ───────────────────────────────────────────────
 // @Summary Get status history for an order
 // @Description Returns the full status transition history

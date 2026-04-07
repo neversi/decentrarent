@@ -98,8 +98,15 @@ func main() {
 	chatService := chat.NewService(chatStore, centrifugoClient)
 	verifier := egov.NewMockVerifier()
 	propertyService := property.NewService(propertyStore, verifier)
+	// ─── EscrowService  ──────────────────────────────────────
+	escrowService, err := escrow.NewService(cfg.SolanaRPCURL, cfg.AuthorityPrivateKey)
+	if err != nil {
+		log.Fatalf("Failed to init escrow service: %v", err)
+	}
+	escrowHandler := escrow.NewHandler(escrowService)
+
 	orderCentrifugo := &orderCentrifugoAdapter{apiURL: cfg.CentrifugoURL, apiKey: cfg.CentrifugoKey}
-	orderService := order.NewService(orderStore, chatStore, kafkaProducer, orderCentrifugo)
+	orderService := order.NewService(orderStore, chatStore, kafkaProducer, orderCentrifugo, escrowService)
 
 	// ─── Kafka consumers ────────────────────────────────────────────
 	chatConsumers, err := chat.NewChatConsumers(cfg.KafkaBrokers, chatService)
@@ -110,15 +117,8 @@ func main() {
 		chatConsumers.Start(ctx)
 	}
 
-	// ─── EscrowService  ──────────────────────────────────────
-	escrowService, err := escrow.NewService(cfg.SolanaRPCURL, cfg.AuthorityPrivateKey)
-	if err != nil {
-		log.Fatalf("Failed to init escrow service: %v", err)
-	}
-	escrowHandler := escrow.NewHandler(escrowService)
-
 	// ─── Order Kafka consumers (Solana events) ─────────────────────
-	orderConsumers, err := order.NewOrderConsumers(cfg.KafkaBrokers, orderService, jobStore, propertyStore)
+	orderConsumers, err := order.NewOrderConsumers(cfg.KafkaBrokers, chatService, orderService, jobStore, propertyStore)
 	if err != nil {
 		log.Printf("Warning: Order Kafka consumers not available: %v", err)
 	} else {
@@ -221,8 +221,13 @@ func main() {
 		r.Get("/orders/{id}", orderHandler.Get)
 		r.Post("/orders/{id}/accept", orderHandler.Accept)
 		r.Post("/orders/{id}/reject", orderHandler.Reject)
+		r.Post("/orders/{id}/dispute", orderHandler.OpenDispute)
 		r.Get("/orders/{id}/payments", orderHandler.GetPayments)
 		r.Get("/orders/{id}/history", orderHandler.GetHistory)
+
+		// Admin
+		r.Get("/admin/orders/disputed", orderHandler.ListDisputed)
+		r.Post("/admin/orders/{id}/resolve", orderHandler.ResolveDispute)
 	})
 
 	// escrow handlers

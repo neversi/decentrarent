@@ -51,6 +51,19 @@ export default function BottomNav() {
   const user = useAuthStore((s) => s.user)
   const profileIncomplete = user ? (!user.first_name || !user.last_name || !user.email) : false
 
+  const visibleTabs = [
+    ...tabs,
+    ...(user?.is_admin ? [{
+      to: '/admin',
+      label: 'Admin',
+      icon: (active: boolean) => (
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? '#FF4D6A' : '#3A3A4A'} strokeWidth="1.8">
+          <path d="M12 2l3 6.5 7 1-5 5 1.2 7L12 18l-6.2 3.5L7 14.5 2 9.5l7-1z"/>
+        </svg>
+      ),
+    }] : []),
+  ]
+
   return (
     <nav
       style={{
@@ -71,7 +84,7 @@ export default function BottomNav() {
         zIndex: 100,
       }}
     >
-      {tabs.map((t) => {
+      {visibleTabs.map((t) => {
         const active = pathname.startsWith(t.to)
         const isWideScreen = typeof window !== 'undefined' && window.innerWidth > 768
         return (

@@ -20,6 +20,7 @@ import PropertyDetailPage from './pages/PropertyDetailPage'
 import ProfilePage from './pages/ProfilePage'
 import OnboardingNewbiePage from './pages/OnboardingNewbiePage'
 import OnboardingWalletPage from './pages/OnboardingWalletPage'
+import AdminDisputePage from './pages/AdminDisputePage'
 
 // UI
 import BottomNav from './components/Layout/BottomNav'
@@ -155,6 +156,17 @@ function AppRoutes() {
           <ProtectedRoute>
             <Layout>
               <ProfilePage />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/admin"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <AdminDisputePage />
             </Layout>
           </ProtectedRoute>
         }

@@ -85,12 +85,12 @@ export function OrderCard({ order, onUpdated, property }: OrderCardProps) {
     shouldReadChain ? order.id : null,
   );
 
-  // Refetch on-chain data when order updates arrive (e.g. after deposit locked)
+  // Refetch on-chain data when order updates arrive (e.g. after deposit locked or party signed)
   useEffect(() => {
     if (shouldReadChain) {
       refetchEscrow();
     }
-  }, [order.escrow_status, order.escrow_address, shouldReadChain, refetchEscrow]);
+  }, [order.escrow_status, order.escrow_address, order.tenant_signed_onchain, order.landlord_signed_onchain, shouldReadChain, refetchEscrow]);
 
   // Off-chain accept/reject state (used for status: 'new')
   const acceptedByMe = isTenant ? order.tenant_signed : order.landlord_signed;

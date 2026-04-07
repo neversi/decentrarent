@@ -85,7 +85,7 @@ func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := h.authService.GenerateJWT(u.ID, u.WalletAddress)
+	token, err := h.authService.GenerateJWT(u.ID, u.WalletAddress, u.IsAdmin)
 	if err != nil {
 		http.Error(w, `{"error":"failed to generate token"}`, http.StatusInternalServerError)
 		return
@@ -129,7 +129,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := h.authService.GenerateJWT(u.ID, u.WalletAddress)
+	token, err := h.authService.GenerateJWT(u.ID, u.WalletAddress, u.IsAdmin)
 	if err != nil {
 		http.Error(w, `{"error":"failed to generate token"}`, http.StatusInternalServerError)
 		return
@@ -220,7 +220,7 @@ func (h *Handler) Verify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := h.authService.GenerateJWT(u.ID, u.WalletAddress)
+	token, err := h.authService.GenerateJWT(u.ID, u.WalletAddress, u.IsAdmin)
 	if err != nil {
 		http.Error(w, `{"error":"failed to generate token"}`, http.StatusInternalServerError)
 		return
@@ -249,15 +249,15 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 
 	walletAddress := mw.GetWalletAddress(r.Context())
 
-	token, err := h.authService.GenerateJWT(userID, walletAddress)
-	if err != nil {
-		http.Error(w, `{"error":"failed to generate token"}`, http.StatusInternalServerError)
-		return
-	}
-
 	u, err := h.userStore.GetByID(userID)
 	if err != nil {
 		http.Error(w, `{"error":"user not found"}`, http.StatusNotFound)
+		return
+	}
+
+	token, err := h.authService.GenerateJWT(userID, walletAddress, u.IsAdmin)
+	if err != nil {
+		http.Error(w, `{"error":"failed to generate token"}`, http.StatusInternalServerError)
 		return
 	}
 

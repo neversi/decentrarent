@@ -6,10 +6,12 @@ import (
 
 // Anchor event discriminators from the IDL (first 8 bytes of SHA256("event:<EventName>")).
 var (
-	DiscriminatorDepositLocked = [8]byte{32, 241, 131, 66, 63, 132, 192, 116}
-	DiscriminatorPartySigned   = [8]byte{169, 92, 130, 193, 52, 197, 129, 22}
-	DiscriminatorEscrowExpired = [8]byte{189, 22, 170, 250, 75, 218, 58, 112}
-	DiscriminatorRentPaid      = [8]byte{140, 29, 172, 69, 152, 38, 73, 241}
+	DiscriminatorDepositLocked   = [8]byte{32, 241, 131, 66, 63, 132, 192, 116}
+	DiscriminatorPartySigned     = [8]byte{169, 92, 130, 193, 52, 197, 129, 22}
+	DiscriminatorEscrowExpired   = [8]byte{189, 22, 170, 250, 75, 218, 58, 112}
+	DiscriminatorRentPaid        = [8]byte{140, 29, 172, 69, 152, 38, 73, 241}
+	DiscriminatorDisputeOpened   = [8]byte{0xef, 0xde, 0x66, 0xeb, 0xc1, 0x55, 0x01, 0xd6}
+	DiscriminatorDepositReleased = [8]byte{0x7c, 0x33, 0xba, 0x7a, 0x2f, 0x61, 0xea, 0xb5}
 )
 
 // Kafka payloads — published as JSON to the corresponding topics.
@@ -48,6 +50,20 @@ type SolanaRentPaidEvent struct {
 	TxSignature string `json:"tx_signature"`
 }
 
+type SolanaDisputeOpenedEvent struct {
+	Escrow      string `json:"escrow"`
+	Reason      string `json:"reason"`
+	TxSignature string `json:"tx_signature"`
+}
+
+type SolanaDepositReleasedEvent struct {
+	Escrow      string `json:"escrow"`
+	Recipient   string `json:"recipient"`
+	Amount      uint64 `json:"amount"`
+	Reason      string `json:"reason"`
+	TxSignature string `json:"tx_signature"`
+}
+
 // DecodedEvent holds a parsed event ready for Kafka publishing.
 type DecodedEvent struct {
 	Topic   string
@@ -57,8 +73,10 @@ type DecodedEvent struct {
 
 // discriminatorToTopic maps discriminators to their Kafka topics.
 var discriminatorToTopic = map[[8]byte]string{
-	DiscriminatorDepositLocked: kafkapkg.TopicSolanaDepositLocked,
-	DiscriminatorPartySigned:   kafkapkg.TopicSolanaPartySigned,
-	DiscriminatorEscrowExpired: kafkapkg.TopicSolanaEscrowExpired,
-	DiscriminatorRentPaid:      kafkapkg.TopicSolanaRentPaid,
+	DiscriminatorDepositLocked:   kafkapkg.TopicSolanaDepositLocked,
+	DiscriminatorPartySigned:     kafkapkg.TopicSolanaPartySigned,
+	DiscriminatorEscrowExpired:   kafkapkg.TopicSolanaEscrowExpired,
+	DiscriminatorRentPaid:        kafkapkg.TopicSolanaRentPaid,
+	DiscriminatorDisputeOpened:   kafkapkg.TopicSolanaDisputeOpened,
+	DiscriminatorDepositReleased: kafkapkg.TopicSolanaDepositReleased,
 }

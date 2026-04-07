@@ -71,4 +71,6 @@ type MessageMeta struct {
 
 	// Для system
 	EventType string `json:"event_type,omitempty"` // order.created, order.signed, etc.
+
+	Tx string `json:"tx,omitempty"` // для событий, связанных с транзакциями
 }

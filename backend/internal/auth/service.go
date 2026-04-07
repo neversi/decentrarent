@@ -97,13 +97,15 @@ func (s *Service) VerifySignature(wallet, signature, nonce string) error {
 type Claims struct {
 	UserID        string `json:"user_id"`
 	WalletAddress string `json:"wallet_address"`
+	IsAdmin       bool   `json:"is_admin"`
 	jwt.RegisteredClaims
 }
 
-func (s *Service) GenerateJWT(userID, walletAddress string) (string, error) {
+func (s *Service) GenerateJWT(userID, walletAddress string, isAdmin bool) (string, error) {
 	claims := Claims{
 		UserID:        userID,
 		WalletAddress: walletAddress,
+		IsAdmin:       isAdmin,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   userID,
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),

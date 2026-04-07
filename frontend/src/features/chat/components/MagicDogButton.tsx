@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { useToastStore } from '../../toast/store';
+import { useAuthStore } from '../../auth/store';
 import { useReleaseDeposit } from '../../escrow/hooks/useReleaseDeposit';
-import { useOpenDispute } from '../../escrow/hooks/useOpenDispute';
 import { usePayRent } from '../../escrow/hooks/usePayRent';
 import { useExpireEscrow } from '../../escrow/hooks/useExpireEscrow';
+import { apiFetch } from '../../../lib/api';
 import { getMagicActions, type MagicAction } from '../utils/getMagicActions';
 import type { Order } from '../../orders/types';
 import './MagicDog.css';
@@ -22,8 +23,8 @@ export function MagicDogButton({ orders, currentUserId, onActionComplete }: Magi
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   const { addToast } = useToastStore();
+  const { token } = useAuthStore();
   const { releaseDeposit } = useReleaseDeposit();
-  const { openDispute } = useOpenDispute();
   const { payRent } = usePayRent();
   const { expireEscrow } = useExpireEscrow();
 
@@ -112,12 +113,10 @@ export function MagicDogButton({ orders, currentUserId, onActionComplete }: Magi
     setLoading(disputeAction.id);
     try {
       const { order } = disputeAction;
-      await openDispute({
-        landlordPubkey: order.landlord_pk,
-        tenantPubkey: order.tenant_pk,
-        orderId: order.id,
-        reason: disputeReason.trim(),
-      });
+      await apiFetch(`/orders/${order.id}/dispute`, {
+        method: 'POST',
+        body: JSON.stringify({ reason: disputeReason.trim() }),
+      }, token);
       addToast({ variant: 'onchain', title: 'Dispute Opened', message: 'Deposit frozen pending resolution' });
       onActionComplete();
       setIsOpen(false);

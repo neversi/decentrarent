@@ -23,10 +23,12 @@ const (
 	TopicRentPaid             = "order.rent.paid"
 
 	// Solana on-chain event topics
-	TopicSolanaDepositLocked = "solana.deposit.locked"
-	TopicSolanaPartySigned   = "solana.party.signed"
-	TopicSolanaEscrowExpired = "solana.escrow.expired"
-	TopicSolanaRentPaid      = "solana.rent.paid"
+	TopicSolanaDepositLocked    = "solana.deposit.locked"
+	TopicSolanaPartySigned      = "solana.party.signed"
+	TopicSolanaEscrowExpired    = "solana.escrow.expired"
+	TopicSolanaRentPaid         = "solana.rent.paid"
+	TopicSolanaDisputeOpened    = "solana.dispute.opened"
+	TopicSolanaDepositReleased  = "solana.deposit.released"
 )
 
 func AllTopics() []string {
@@ -43,6 +45,8 @@ func AllTopics() []string {
 		TopicSolanaPartySigned,
 		TopicSolanaEscrowExpired,
 		TopicSolanaRentPaid,
+		TopicSolanaDisputeOpened,
+		TopicSolanaDepositReleased,
 	}
 }
 
@@ -139,6 +143,20 @@ type SolanaRentPaidEvent struct {
 	Amount      uint64 `json:"amount"`
 	TotalPaid   uint64 `json:"total_paid"`
 	PaidAt      int64  `json:"paid_at"`
+	TxSignature string `json:"tx_signature"`
+}
+
+type SolanaDisputeOpenedEvent struct {
+	Escrow      string `json:"escrow"`
+	Reason      string `json:"reason"`
+	TxSignature string `json:"tx_signature"`
+}
+
+type SolanaDepositReleasedEvent struct {
+	Escrow      string `json:"escrow"`
+	Recipient   string `json:"recipient"`
+	Amount      uint64 `json:"amount"`
+	Reason      string `json:"reason"`
 	TxSignature string `json:"tx_signature"`
 }
 

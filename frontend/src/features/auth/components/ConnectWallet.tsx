@@ -4,6 +4,7 @@ import { useWallet } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { useAuthStore } from '../store';
 import { apiFetch } from '../../../lib/api';
+import { useWalletAuth } from '../hooks/useWalletAuth';
 import type { AuthResponse } from '../types';
 
 export function ConnectWallet() {
@@ -11,15 +12,37 @@ export function ConnectWallet() {
   const { connected, publicKey } = useWallet();
   const { setVisible } = useWalletModal();
   const { login } = useAuthStore();
+  const { signIn: walletSignIn, isLoading: walletSignInLoading, error: walletSignInError } = useWalletAuth();
   const walletConnectIntent = useRef(false);
+  const walletSignInIntent = useRef(false);
 
-  // After wallet connects, navigate to onboarding/wallet
+  // After wallet connects, navigate to onboarding/wallet or sign in
   useEffect(() => {
-    if (connected && publicKey && walletConnectIntent.current) {
+    if (!connected || !publicKey) return;
+
+    if (walletConnectIntent.current) {
       walletConnectIntent.current = false;
       navigate('/onboarding/wallet');
+    } else if (walletSignInIntent.current) {
+      walletSignInIntent.current = false;
+      walletSignIn().then((result) => {
+        if (result === 'success') navigate('/home');
+        else navigate('/onboarding/wallet');
+      }).catch(() => {});
     }
-  }, [connected, publicKey, navigate]);
+  }, [connected, publicKey, navigate, walletSignIn]);
+
+  const handleWalletSignIn = () => {
+    if (connected && publicKey) {
+      walletSignIn().then((result) => {
+        if (result === 'success') navigate('/home');
+        else navigate('/onboarding/wallet');
+      }).catch(() => {});
+    } else {
+      walletSignInIntent.current = true;
+      setVisible(true);
+    }
+  };
 
   const [showSignIn, setShowSignIn] = useState(false);
   const [signInUser, setSignInUser] = useState('');
@@ -209,6 +232,29 @@ export function ConnectWallet() {
               boxShadow: '0 8px 24px rgba(61,214,140,0.25)',
             }}>
               {signInLoading ? 'Signing in...' : 'Sign In'}
+            </button>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '8px 0' }}>
+              <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.08)' }} />
+              <span style={{ color: '#7A7A8A', fontSize: 12 }}>or</span>
+              <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.08)' }} />
+            </div>
+
+            {walletSignInError && <p style={{ color: '#FF4D6A', fontSize: 13 }}>{walletSignInError}</p>}
+            <button
+              onClick={handleWalletSignIn}
+              disabled={walletSignInLoading}
+              style={{
+                width: '100%', padding: '14px', borderRadius: 12, border: '1px solid rgba(153,69,255,0.3)',
+                background: 'linear-gradient(135deg, rgba(153,69,255,0.12), rgba(153,69,255,0.06))',
+                color: '#C084FC', fontWeight: 700, fontSize: 15, cursor: 'pointer',
+                fontFamily: "'DM Sans',sans-serif",
+                opacity: walletSignInLoading ? 0.7 : 1,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              }}
+            >
+              <span style={{ fontSize: 18 }}>{'\uD83D\uDD11'}</span>
+              {walletSignInLoading ? 'Awaiting signature...' : 'Sign in with Wallet'}
             </button>
           </div>
         </div>

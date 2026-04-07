@@ -7,9 +7,11 @@ import (
 	"log"
 	"time"
 
+	"github.com/gagliardetto/solana-go"
 	"github.com/google/uuid"
 
 	"github.com/abdro/decentrarent/backend/internal/chat"
+	"github.com/abdro/decentrarent/backend/internal/escrow"
 	"github.com/abdro/decentrarent/backend/internal/kafka"
 )
 
@@ -34,10 +36,11 @@ type Service struct {
 	chatStore  *chat.Store
 	producer   *kafka.Producer
 	centrifugo CentrifugoPublisher
+	escrowSvc  *escrow.Service
 }
 
-func NewService(store *Store, chatStore *chat.Store, producer *kafka.Producer, centrifugo CentrifugoPublisher) *Service {
-	return &Service{store: store, chatStore: chatStore, producer: producer, centrifugo: centrifugo}
+func NewService(store *Store, chatStore *chat.Store, producer *kafka.Producer, centrifugo CentrifugoPublisher, escrowSvc *escrow.Service) *Service {
+	return &Service{store: store, chatStore: chatStore, producer: producer, centrifugo: centrifugo, escrowSvc: escrowSvc}
 }
 
 // ─── CreateOrder ────────────────────────────────────────────────────
@@ -169,6 +172,112 @@ func (s *Service) RejectOrder(orderID, userID string) (*Order, error) {
 	o.EscrowStatus = StatusRejected
 
 	s.publishCentrifugoOrderUpdate(o, "order_rejected", "")
+	return o, nil
+}
+
+// ─── OpenDispute ────────────────────────────────────────────────────
+
+var ErrDisputeReasonEmpty = errors.New("dispute reason cannot be empty")
+var ErrNotActiveOrder = errors.New("order must be active to open a dispute")
+
+func (s *Service) OpenDispute(orderID, userID, reason string) (*Order, error) {
+	if reason == "" {
+		return nil, ErrDisputeReasonEmpty
+	}
+
+	o, err := s.store.GetByID(orderID)
+	if err != nil {
+		return nil, ErrOrderNotFound
+	}
+
+	if o.TenantID != userID && o.LandlordID != userID {
+		return nil, ErrForbidden
+	}
+
+	if o.EscrowStatus != StatusActive {
+		return nil, ErrNotActiveOrder
+	}
+
+	landlordPK, err := solana.PublicKeyFromBase58(o.LandlordPK)
+	if err != nil {
+		return nil, fmt.Errorf("invalid landlord public key: %w", err)
+	}
+	tenantPK, err := solana.PublicKeyFromBase58(o.TenantPK)
+	if err != nil {
+		return nil, fmt.Errorf("invalid tenant public key: %w", err)
+	}
+	orderUUID, err := uuid.Parse(o.ID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid order id: %w", err)
+	}
+
+	tx, err := s.escrowSvc.OpenDispute(context.Background(), landlordPK, tenantPK, [16]byte(orderUUID), reason)
+	if err != nil {
+		return nil, fmt.Errorf("on-chain open_dispute failed: %w", err)
+	}
+
+	log.Printf("opened dispute: %s", tx)
+
+	// if err := s.store.UpdateDisputeReason(o.ID, reason); err != nil {
+	// 	return nil, fmt.Errorf("update status: %w", err)
+	// }
+	// o.DisputeReason = reason
+
+	// if err := s.store.UpdateStatus(o.ID, StatusDisputed, "system", "dispute opened on-chain"); err != nil {
+	// 	return nil, fmt.Errorf("update status: %w", err)
+	// }
+	// o.EscrowStatus = StatusDisputed
+
+	// s.chatSvc.SendSystemMessageWithTx(o.ConversationID, fmt.Sprintf("Dispute opened: %s", reason), "dispute_opened", tx)
+	// s.service.publishCentrifugoOrderUpdate(o, "dispute_opened", tx)
+
+	return o, nil
+}
+
+// ─── ResolveDispute ─────────────────────────────────────────────────
+
+var ErrNotDisputedOrder = errors.New("order must be in disputed status to resolve")
+
+func (s *Service) ResolveDispute(orderID, winner, reason string) (*Order, error) {
+	if winner != "tenant" && winner != "landlord" {
+		return nil, ErrInvalidWinner
+	}
+	if reason == "" {
+		return nil, ErrDisputeReasonEmpty
+	}
+
+	o, err := s.store.GetByID(orderID)
+	if err != nil {
+		return nil, ErrOrderNotFound
+	}
+	if o.EscrowStatus != StatusDisputed {
+		return nil, ErrNotDisputedOrder
+	}
+
+	landlordPK, err := solana.PublicKeyFromBase58(o.LandlordPK)
+	if err != nil {
+		return nil, fmt.Errorf("invalid landlord public key: %w", err)
+	}
+	tenantPK, err := solana.PublicKeyFromBase58(o.TenantPK)
+	if err != nil {
+		return nil, fmt.Errorf("invalid tenant public key: %w", err)
+	}
+	orderUUID, err := uuid.Parse(o.ID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid order id: %w", err)
+	}
+
+	var tx string
+	if winner == "tenant" {
+		tx, err = s.escrowSvc.ResolveDisputeTenant(context.Background(), landlordPK, tenantPK, [16]byte(orderUUID), reason)
+	} else {
+		tx, err = s.escrowSvc.ResolveDisputeLandlord(context.Background(), landlordPK, tenantPK, [16]byte(orderUUID), reason)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("on-chain resolve_dispute failed: %w", err)
+	}
+
+	log.Printf("[order] resolve dispute submitted winner=%s tx=%s", winner, tx)
 	return o, nil
 }
 

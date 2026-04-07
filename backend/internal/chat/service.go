@@ -135,6 +135,22 @@ func (s *Service) SendSystemMessage(conversationID, content, eventType string) (
 	return msg, nil
 }
 
+// SendSystemMessage sends a system notification to a conversation.
+// Сохраняет в БД + пушит через Centrifugo WebSocket в реалтайме.
+func (s *Service) SendSystemMessageWithTx(conversationID, content, eventType, tx string) (*Message, error) {
+	meta := &MessageMeta{
+		EventType: eventType,
+		Tx:        tx,
+	}
+	msg, err := s.store.SaveTypedMessage(conversationID, systemSenderID, content, MessageTypeSystem, meta)
+	if err != nil {
+		return nil, err
+	}
+
+	s.pushToCentrifugo(conversationID, msg)
+	return msg, nil
+}
+
 // SendDocumentMessage sends a document link to a conversation.
 func (s *Service) SendDocumentMessage(conversationID, content, documentURL, documentName, orderID string) (*Message, error) {
 	meta := &MessageMeta{

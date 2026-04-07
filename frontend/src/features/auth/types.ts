@@ -7,6 +7,7 @@ export interface User {
   email: string;
   phone: string;
   display_name: string;
+  is_admin: boolean;
   created_at: string;
   balance: number;
 }

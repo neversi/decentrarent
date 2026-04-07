@@ -31,3 +31,14 @@ export function getOrder(orderId: string, token: string): Promise<Order> {
 export function listOrdersByProperty(propertyId: string, token: string): Promise<Order[]> {
   return apiFetch<Order[]>(`/orders?property_id=${encodeURIComponent(propertyId)}`, {}, token);
 }
+
+export function listDisputedOrders(token: string): Promise<Order[]> {
+  return apiFetch<Order[]>('/admin/orders/disputed', {}, token);
+}
+
+export function resolveDispute(orderId: string, winner: 'tenant' | 'landlord', reason: string, token: string): Promise<void> {
+  return apiFetch<void>(`/admin/orders/${orderId}/resolve`, {
+    method: 'POST',
+    body: JSON.stringify({ winner, reason }),
+  }, token);
+}

@@ -30,6 +30,7 @@ func (s *Service) AuthMiddleware(next http.Handler) http.Handler {
 
 		ctx := context.WithValue(r.Context(), mw.UserIDKey, claims.UserID)
 		ctx = context.WithValue(ctx, mw.WalletAddressKey, claims.WalletAddress)
+		ctx = context.WithValue(ctx, mw.IsAdminKey, claims.IsAdmin)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

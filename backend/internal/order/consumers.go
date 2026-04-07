@@ -3,12 +3,14 @@ package order
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"time"
 
 	"github.com/gagliardetto/solana-go"
 	"github.com/google/uuid"
 
+	"github.com/abdro/decentrarent/backend/internal/chat"
 	kafkapkg "github.com/abdro/decentrarent/backend/internal/kafka"
 	"github.com/abdro/decentrarent/backend/internal/property"
 )
@@ -21,20 +23,23 @@ var periodSeconds = map[string]int64{
 }
 
 type OrderConsumers struct {
+	chatSvc       *chat.Service
 	service       *Service
 	jobStore      *JobStore
 	propertyStore *property.Store
 	cg            *kafkapkg.ConsumerGroup
 }
 
-func NewOrderConsumers(brokers []string, service *Service, jobStore *JobStore, propertyStore *property.Store) (*OrderConsumers, error) {
-	oc := &OrderConsumers{service: service, jobStore: jobStore, propertyStore: propertyStore}
+func NewOrderConsumers(brokers []string, chatSvc *chat.Service, service *Service, jobStore *JobStore, propertyStore *property.Store) (*OrderConsumers, error) {
+	oc := &OrderConsumers{chatSvc: chatSvc, service: service, jobStore: jobStore, propertyStore: propertyStore}
 
 	handlers := map[string]kafkapkg.MessageHandler{
-		kafkapkg.TopicSolanaDepositLocked: oc.handleDepositLocked,
-		kafkapkg.TopicSolanaPartySigned:   oc.handlePartySigned,
-		kafkapkg.TopicSolanaEscrowExpired: oc.handleEscrowExpired,
-		kafkapkg.TopicSolanaRentPaid:      oc.handleRentPaid,
+		kafkapkg.TopicSolanaDepositLocked:   oc.handleDepositLocked,
+		kafkapkg.TopicSolanaPartySigned:     oc.handlePartySigned,
+		kafkapkg.TopicSolanaEscrowExpired:   oc.handleEscrowExpired,
+		kafkapkg.TopicSolanaRentPaid:        oc.handleRentPaid,
+		kafkapkg.TopicSolanaDisputeOpened:   oc.handleDisputeOpened,
+		kafkapkg.TopicSolanaDepositReleased: oc.handleDepositReleased,
 	}
 
 	cg, err := kafkapkg.NewConsumerGroup(brokers, "order-solana-consumer", handlers)
@@ -204,7 +209,7 @@ func (oc *OrderConsumers) handleRentPaid(_ string, value []byte) error {
 
 	sig := solana.Signature{}
 	if evt.TxSignature == sig.String() {
-		log.Printf("[order-consumer] invalid transaction signature in party_signed event: %s", evt.TxSignature)
+		log.Printf("[order-consumer] invalid transaction signature in rent_paid event: %s", evt.TxSignature)
 		return nil
 	}
 
@@ -224,8 +229,100 @@ func (oc *OrderConsumers) handleRentPaid(_ string, value []byte) error {
 		return err
 	}
 
+	oc.chatSvc.SendSystemMessageWithTx(o.ConversationID, fmt.Sprintf("Rent paid in amount of %f %s", float64(evt.Amount)/1000000000, "SOL"), "rent_paid", evt.TxSignature)
 	oc.service.publishCentrifugoOrderUpdate(o, "rent_paid", evt.TxSignature)
 	log.Printf("[order-consumer] rent paid for order %s amount=%d (tx: %s)", o.ID, evt.Amount, evt.TxSignature)
+	return nil
+}
+
+func (oc *OrderConsumers) handleDisputeOpened(_ string, value []byte) error {
+	var evt kafkapkg.SolanaDisputeOpenedEvent
+	if err := json.Unmarshal(value, &evt); err != nil {
+		return err
+	}
+
+	sig := solana.Signature{}
+	if evt.TxSignature == sig.String() {
+		log.Printf("[order-consumer] invalid transaction signature in dispute_opened event: %s", evt.TxSignature)
+		return nil
+	}
+
+	o, err := oc.service.store.FindByEscrowAddress(evt.Escrow)
+	if err != nil {
+		log.Printf("[order-consumer] no order for escrow %s: %v", evt.Escrow, err)
+		return nil
+	}
+
+	if o.EscrowStatus != StatusActive {
+		log.Printf("[order-consumer] order %s not active (is %s), skipping dispute", o.ID, o.EscrowStatus)
+		return nil
+	}
+
+	if err := oc.service.store.UpdateDisputeReason(o.ID, evt.Reason); err != nil {
+		return err
+	}
+	o.DisputeReason = evt.Reason
+
+	if err := oc.service.store.UpdateStatus(o.ID, StatusDisputed, "system", "dispute opened on-chain"); err != nil {
+		return err
+	}
+	o.EscrowStatus = StatusDisputed
+
+	oc.chatSvc.SendSystemMessageWithTx(o.ConversationID, fmt.Sprintf("Dispute opened: %s", evt.Reason), "dispute_opened", evt.TxSignature)
+	oc.service.publishCentrifugoOrderUpdate(o, "dispute_opened", evt.TxSignature)
+
+	log.Printf("[order-consumer] dispute opened for order %s (tx: %s)", o.ID, evt.TxSignature)
+	return nil
+}
+
+func (oc *OrderConsumers) handleDepositReleased(_ string, value []byte) error {
+	var evt kafkapkg.SolanaDepositReleasedEvent
+	if err := json.Unmarshal(value, &evt); err != nil {
+		return err
+	}
+
+	sig := solana.Signature{}
+	if evt.TxSignature == sig.String() {
+		log.Printf("[order-consumer] invalid transaction signature in deposit_released event: %s", evt.TxSignature)
+		return nil
+	}
+
+	o, err := oc.service.store.FindByEscrowAddress(evt.Escrow)
+	if err != nil {
+		log.Printf("[order-consumer] no order for escrow %s: %v", evt.Escrow, err)
+		return nil
+	}
+
+	if o.EscrowStatus != StatusDisputed {
+		log.Printf("[order-consumer] order %s not in disputed status (is %s), skipping deposit_released", o.ID, o.EscrowStatus)
+		return nil
+	}
+
+	// Determine winner by matching recipient to tenant or landlord PK
+	var newStatus, winner string
+	switch evt.Recipient {
+	case o.TenantPK:
+		newStatus = StatusDisputeResolvedTenant
+		winner = "tenant"
+	case o.LandlordPK:
+		newStatus = StatusDisputeResolvedLord
+		winner = "landlord"
+	default:
+		log.Printf("[order-consumer] deposit_released recipient %s matches neither tenant nor landlord for order %s", evt.Recipient, o.ID)
+		return nil
+	}
+
+	if err := oc.service.store.UpdateStatus(o.ID, newStatus, "system", fmt.Sprintf("dispute resolved for %s on-chain", winner)); err != nil {
+		return err
+	}
+	o.EscrowStatus = newStatus
+
+	msg := fmt.Sprintf("Dispute resolved in favour of %s. Reason: %s", winner, evt.Reason)
+	oc.chatSvc.SendSystemMessageWithTx(o.ConversationID, msg, "dispute_resolved", evt.TxSignature)
+	oc.service.publishCentrifugoOrderUpdate(o, "dispute_resolved", evt.TxSignature)
+	oc.service.publishOrderEvent(kafkapkg.TopicOrderDisputeResolved, o)
+
+	log.Printf("[order-consumer] dispute resolved for order %s winner=%s (tx: %s)", o.ID, winner, evt.TxSignature)
 	return nil
 }
 
@@ -237,7 +334,7 @@ func (oc *OrderConsumers) handleEscrowExpired(_ string, value []byte) error {
 
 	sig := solana.Signature{}
 	if evt.TxSignature == sig.String() {
-		log.Printf("[order-consumer] invalid transaction signature in party_signed event: %s", evt.TxSignature)
+		log.Printf("[order-consumer] invalid transaction signature in escrow_expired event: %s", evt.TxSignature)
 		return nil
 	}
 

@@ -21,6 +21,8 @@ export interface MessageMeta {
   modal_id?: string;
   // system
   event_type?: string;
+
+  tx?: string;
 }
 
 export interface Message {
