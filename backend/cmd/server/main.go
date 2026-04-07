@@ -152,7 +152,7 @@ func main() {
 	// ─── Handlers ───────────────────────────────────────────────────
 	authHandler := auth.NewHandler(authService, userStore)
 	userHandler := user.NewHandler(userStore)
-	chatHandler := chat.NewHandler(chatStore, chatService)
+	chatHandler := chat.NewHandler(chatStore, chatService, s3Client)
 	centrifugoHandler := chat.NewCentrifugoHandler(authService, chatService)
 	mediaHandler := media.NewHandler(mediaStore, s3Client, propertyStore)
 	propertyHandler := property.NewHandler(propertyStore, propertyService, mediaHandler, mediaHandler)
@@ -213,6 +213,8 @@ func main() {
 		r.Delete("/conversations/{id}", chatHandler.DeleteConversation)
 		r.Get("/conversations/{id}/messages", chatHandler.GetMessages)
 		r.Post("/conversations/documents", chatHandler.SendDocument)
+		r.Post("/conversations/{id}/photos/upload-url", chatHandler.GetPhotoUploadURL)
+		r.Post("/conversations/{id}/photos", chatHandler.SendPhoto)
 
 		// Properties (owner actions)
 		r.Post("/properties", propertyHandler.Create)

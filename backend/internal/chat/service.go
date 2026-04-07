@@ -184,6 +184,24 @@ func (s *Service) SendModalMessage(conversationID, content, modalAction, orderID
 	return msg, nil
 }
 
+// SendPhotoMessage sends a photo message to a conversation.
+func (s *Service) SendPhotoMessage(conversationID, senderID, caption, photoURL, photoKey string) (*Message, error) {
+	meta := &MessageMeta{
+		PhotoURL: photoURL,
+		PhotoKey: photoKey,
+	}
+	if caption == "" {
+		caption = "Photo"
+	}
+	msg, err := s.store.SaveTypedMessage(conversationID, senderID, caption, MessageTypePhoto, meta)
+	if err != nil {
+		return nil, err
+	}
+
+	s.pushToCentrifugo(conversationID, msg)
+	return msg, nil
+}
+
 // RespondToModal updates a modal's status.
 func (s *Service) RespondToModal(messageID, status string) error {
 	return s.store.UpdateModalStatus(messageID, status)

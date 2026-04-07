@@ -77,6 +77,18 @@ func (s *S3Client) GenerateDownloadURL(fileKey string) (string, error) {
 	return presignedURL.String(), nil
 }
 
+func (s *S3Client) GenerateChatUploadURL(conversationID, fileName string) (uploadURL, fileKey string, err error) {
+	ext := filepath.Ext(fileName)
+	fileKey = fmt.Sprintf("chat/%s/%s%s", conversationID, uuid.New().String(), ext)
+
+	presignedURL, err := s.signClient.PresignedPutObject(context.Background(), s.bucket, fileKey, 15*time.Minute)
+	if err != nil {
+		return "", "", err
+	}
+
+	return presignedURL.String(), fileKey, nil
+}
+
 func (s *S3Client) DeleteObject(fileKey string) error {
 	return s.client.RemoveObject(context.Background(), s.bucket, fileKey, minio.RemoveObjectOptions{})
 }

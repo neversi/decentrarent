@@ -11,13 +11,24 @@ import (
 	mw "github.com/abdro/decentrarent/backend/internal/middleware"
 )
 
+// S3Uploader is the subset of media.S3Client we need for chat photo uploads.
+type S3Uploader interface {
+	GenerateChatUploadURL(conversationID, fileName string) (uploadURL, fileKey string, err error)
+	GenerateDownloadURL(fileKey string) (string, error)
+}
+
 type Handler struct {
 	store   *Store
 	service *Service
+	s3      S3Uploader
 }
 
-func NewHandler(store *Store, service *Service) *Handler {
-	return &Handler{store: store, service: service}
+func NewHandler(store *Store, service *Service, s3 ...S3Uploader) *Handler {
+	h := &Handler{store: store, service: service}
+	if len(s3) > 0 {
+		h.s3 = s3[0]
+	}
+	return h
 }
 
 // ListConversations godoc
@@ -223,6 +234,126 @@ func (h *Handler) SendDocument(w http.ResponseWriter, r *http.Request) {
 	msg, err := h.service.SendDocumentMessage(conv.ID, req.Content, req.DocumentURL, req.DocumentName, req.OrderID)
 	if err != nil {
 		http.Error(w, `{"error":"failed to send document"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(msg)
+}
+
+// ─── Photo Upload URL ────────────────────────────────────────────
+
+type photoUploadURLRequest struct {
+	FileName string `json:"file_name"`
+}
+
+// GetPhotoUploadURL godoc
+// @Summary Get presigned URL for chat photo upload
+// @Tags chat
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param id path string true "Conversation ID"
+// @Param body body photoUploadURLRequest true "File name"
+// @Success 200 {object} map[string]string
+// @Router /conversations/{id}/photos/upload-url [post]
+func (h *Handler) GetPhotoUploadURL(w http.ResponseWriter, r *http.Request) {
+	userID := mw.GetUserID(r.Context())
+	if userID == "" {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	convID := chi.URLParam(r, "id")
+	conv, err := h.store.GetConversation(convID)
+	if err != nil {
+		http.Error(w, `{"error":"conversation not found"}`, http.StatusNotFound)
+		return
+	}
+	if conv.LandlordID != userID && conv.LoanerID != userID {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+
+	if h.s3 == nil {
+		http.Error(w, `{"error":"file uploads not configured"}`, http.StatusInternalServerError)
+		return
+	}
+
+	var req photoUploadURLRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.FileName == "" {
+		http.Error(w, `{"error":"file_name is required"}`, http.StatusBadRequest)
+		return
+	}
+
+	uploadURL, fileKey, err := h.s3.GenerateChatUploadURL(convID, req.FileName)
+	if err != nil {
+		http.Error(w, `{"error":"failed to generate upload URL"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"upload_url": uploadURL,
+		"file_key":   fileKey,
+	})
+}
+
+// ─── Send Photo ──────────────────────────────────────────────────
+
+type sendPhotoRequest struct {
+	FileKey string `json:"file_key"`
+	Caption string `json:"caption"`
+}
+
+// SendPhoto godoc
+// @Summary Send a photo message in chat
+// @Tags chat
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param id path string true "Conversation ID"
+// @Param body body sendPhotoRequest true "Photo details"
+// @Success 200 {object} Message
+// @Router /conversations/{id}/photos [post]
+func (h *Handler) SendPhoto(w http.ResponseWriter, r *http.Request) {
+	userID := mw.GetUserID(r.Context())
+	if userID == "" {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	convID := chi.URLParam(r, "id")
+	conv, err := h.store.GetConversation(convID)
+	if err != nil {
+		http.Error(w, `{"error":"conversation not found"}`, http.StatusNotFound)
+		return
+	}
+	if conv.LandlordID != userID && conv.LoanerID != userID {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+
+	if h.s3 == nil {
+		http.Error(w, `{"error":"file uploads not configured"}`, http.StatusInternalServerError)
+		return
+	}
+
+	var req sendPhotoRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.FileKey == "" {
+		http.Error(w, `{"error":"file_key is required"}`, http.StatusBadRequest)
+		return
+	}
+
+	downloadURL, err := h.s3.GenerateDownloadURL(req.FileKey)
+	if err != nil {
+		http.Error(w, `{"error":"failed to generate download URL"}`, http.StatusInternalServerError)
+		return
+	}
+
+	msg, err := h.service.SendPhotoMessage(conv.ID, userID, req.Caption, downloadURL, req.FileKey)
+	if err != nil {
+		http.Error(w, `{"error":"failed to send photo"}`, http.StatusInternalServerError)
 		return
 	}
 

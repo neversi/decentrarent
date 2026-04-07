@@ -102,6 +102,22 @@ export function MessageList({ messages, currentUserId, onLoadMore }: MessageList
 
         const msg = item.msg;
         const isMine = msg.sender_id === currentUserId;
+
+        if (msg.message_type === 'photo') {
+          return (
+            <div key={msg.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
+              <div style={{ maxWidth: '75%' }}>
+                {!isMine && (
+                  <p style={{ fontSize: 11, color: '#8A8A9A', marginBottom: 4, paddingLeft: 4 }}>
+                    {shortWallet(msg.sender_id)}
+                  </p>
+                )}
+                <PhotoBubble msg={msg} isMine={isMine} />
+              </div>
+            </div>
+          );
+        }
+
         return (
           <div
             key={msg.id}
@@ -279,5 +295,60 @@ function DocumentBubble({ msg }: { msg: Message }) {
         {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
       </p>
     </div>
+  );
+}
+
+/* ── Photo Bubble ── */
+
+function PhotoBubble({ msg, isMine = false }: { msg: Message; isMine?: boolean }) {
+  const photoUrl = msg.metadata?.photo_url;
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <>
+      <div
+        onClick={() => photoUrl && setExpanded(true)}
+        style={{
+          background: isMine ? 'rgba(147, 51, 234, 0.15)' : 'rgba(255, 255, 255, 0.06)',
+          border: `1px solid ${isMine ? 'rgba(147, 51, 234, 0.3)' : 'rgba(255, 255, 255, 0.1)'}`,
+          borderRadius: 12,
+          padding: 6,
+          cursor: photoUrl ? 'pointer' : 'default',
+        }}
+      >
+        {photoUrl ? (
+          <img
+            src={photoUrl}
+            alt={msg.content || 'Photo'}
+            style={{ width: '100%', maxHeight: 240, objectFit: 'cover', borderRadius: 8, display: 'block' }}
+          />
+        ) : (
+          <div style={{ padding: '20px', textAlign: 'center', color: '#6A6A7A', fontSize: 13 }}>Photo unavailable</div>
+        )}
+        {msg.content && msg.content !== 'Photo' && (
+          <p style={{ fontSize: 12, color: '#e2e8f0', padding: '6px 8px 2px', margin: 0 }}>{msg.content}</p>
+        )}
+        <p style={{ fontSize: 10, color: '#6A6A7A', padding: '2px 8px 4px', margin: 0 }}>
+          {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        </p>
+      </div>
+
+      {expanded && photoUrl && (
+        <div
+          onClick={() => setExpanded(false)}
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center',
+            justifyContent: 'center', zIndex: 3000, cursor: 'pointer',
+          }}
+        >
+          <img
+            src={photoUrl}
+            alt={msg.content || 'Photo'}
+            style={{ maxWidth: '90vw', maxHeight: '90vh', objectFit: 'contain', borderRadius: 8 }}
+          />
+        </div>
+      )}
+    </>
   );
 }
