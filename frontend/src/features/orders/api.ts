@@ -20,8 +20,15 @@ export function rejectOrder(orderId: string, token: string): Promise<Order> {
   }, token);
 }
 
+interface OrdersListResponse {
+  orders: Order[]
+  sol_price_usdt: number
+  price_updated_at: string
+}
+
 export function listOrdersByConversation(conversationId: string, token: string): Promise<Order[]> {
-  return apiFetch<Order[]>(`/orders?conversation_id=${encodeURIComponent(conversationId)}`, {}, token);
+  return apiFetch<OrdersListResponse>(`/orders?conversation_id=${encodeURIComponent(conversationId)}`, {}, token)
+    .then(res => res.orders ?? []);
 }
 
 export function getOrder(orderId: string, token: string): Promise<Order> {
@@ -29,7 +36,8 @@ export function getOrder(orderId: string, token: string): Promise<Order> {
 }
 
 export function listOrdersByProperty(propertyId: string, token: string): Promise<Order[]> {
-  return apiFetch<Order[]>(`/orders?property_id=${encodeURIComponent(propertyId)}`, {}, token);
+  return apiFetch<OrdersListResponse>(`/orders?property_id=${encodeURIComponent(propertyId)}`, {}, token)
+    .then(res => res.orders ?? []);
 }
 
 export function listDisputedOrders(token: string): Promise<Order[]> {
