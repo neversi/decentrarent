@@ -16,6 +16,7 @@ const (
 	MessageTypeSystem   = "system"   // системное уведомление
 	MessageTypeDocument = "document" // договор / документ (PDF и т.д.)
 	MessageTypeModal    = "modal"    // модалка с действиями (принять/отклонить)
+	MessageTypePhoto    = "photo"    // фото в чате (доказательства, диспут и т.д.)
 )
 
 // ─── Modal action types ─────────────────────────────────────────────
@@ -73,4 +74,8 @@ type MessageMeta struct {
 	EventType string `json:"event_type,omitempty"` // order.created, order.signed, etc.
 
 	Tx string `json:"tx,omitempty"` // для событий, связанных с транзакциями
+
+	// Для photo
+	PhotoURL string `json:"photo_url,omitempty"` // presigned download URL
+	PhotoKey string `json:"photo_key,omitempty"` // MinIO file key
 }

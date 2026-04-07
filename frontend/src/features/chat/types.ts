@@ -8,7 +8,7 @@ export interface Conversation {
   created_at: string;
 }
 
-export type MessageType = 'text' | 'system' | 'modal' | 'document';
+export type MessageType = 'text' | 'system' | 'modal' | 'document' | 'photo';
 
 export interface MessageMeta {
   // document
@@ -21,8 +21,11 @@ export interface MessageMeta {
   modal_id?: string;
   // system
   event_type?: string;
-
   tx?: string;
+
+  // photo
+  photo_url?: string;
+  photo_key?: string;
 }
 
 export interface Message {

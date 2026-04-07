@@ -94,6 +94,31 @@ export function ChatWindow() {
   );
 
   const { orders, chatOrders, loadOrders } = useOrderUpdates(centrifugoRef, activeConv?.id || null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+
+  const handlePhotoSend = useCallback(async (file: File) => {
+    if (!activeConv || !token) return;
+    setPhotoUploading(true);
+    try {
+      // 1. Get presigned upload URL
+      const { upload_url, file_key } = await apiFetch<{ upload_url: string; file_key: string }>(
+        `/conversations/${activeConv.id}/photos/upload-url`,
+        { method: 'POST', body: JSON.stringify({ file_name: file.name }) },
+        token,
+      );
+      // 2. Upload directly to MinIO
+      await fetch(upload_url, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } });
+      // 3. Register photo message
+      await apiFetch(`/conversations/${activeConv.id}/photos`, {
+        method: 'POST',
+        body: JSON.stringify({ file_key, caption: '' }),
+      }, token);
+    } catch (err) {
+      console.error('Photo upload failed:', err);
+    } finally {
+      setPhotoUploading(false);
+    }
+  }, [activeConv, token]);
 
   useEffect(() => {
     if (!selectedConversation) return;
@@ -347,7 +372,7 @@ export function ChatWindow() {
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, padding: '12px 12px 16px' }}>
               <MagicDogButton orders={orders} currentUserId={currentUserId} onActionComplete={loadOrders} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <MessageInput onSend={sendMessage} />
+                <MessageInput onSend={sendMessage} onPhoto={handlePhotoSend} uploading={photoUploading} />
               </div>
             </div>
           </div>
