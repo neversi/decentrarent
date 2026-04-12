@@ -11,9 +11,17 @@ Decentralized rental platform on Solana. Tenants and landlords negotiate via rea
 5. Both parties **sign the escrow** on-chain — the contract becomes active
 6. Tenant **pays rent** periodically (SOL transferred directly to landlord)
 7. At the end — deposit is released back to tenant, or disputed if there's a conflict
-8. **Disputes** are resolved by an admin with evidence (photos, chat history)
+8. **Disputes** are resolved by an admin (in the future will be through onchain dispute protocol) with evidence (photos, chat history)
 
 All financial operations happen on Solana devnet. Chat, notifications, and order management are handled by the backend.
+
+## TODO
+
+1. [] **Decentralized Identity** - identify users and their properties IRL (Abdarrakhman)
+  - SAS (Solana Attestation Service)
+  - 
+2. [] **On-chain dispute resolution** - Justice protocol (Andrew), analog of [Kleros.io](https://kleros.io)
+3. [] **On-Chain document storage** - Store documents privately (visible only for 2 parties + juries)
 
 ## Tech Stack
 
